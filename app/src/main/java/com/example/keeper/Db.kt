@@ -99,7 +99,7 @@ object Db {
             "SELECT * FROM notes WHERE $where ORDER BY pinned DESC, modified DESC",
             args.toTypedArray()
         ).use { while (it.moveToNext()) out.add(readNote(it)) }
-        out.forEach { loadChildren(it) }
+        attachChildren(out)
         return out
     }
 
@@ -108,14 +108,14 @@ object Db {
     }
 
     /** Notes whose reminder is still pending — used to (re)schedule alarms.
-     *  One-time reminders that already fired are excluded so they never re-fire. */
+     *  One-time reminders that already fired are excluded so they never re-fire.
+     *  Items/labels are not loaded: scheduling only needs the reminder columns. */
     fun withReminders(): List<Note> {
         val out = mutableListOf<Note>()
         db.rawQuery(
             "SELECT * FROM notes WHERE reminder_at>0 AND (reminder_fired=0 OR reminder_repeat<>'NONE')",
             null,
         ).use { while (it.moveToNext()) out.add(readNote(it)) }
-        out.forEach { loadChildren(it) }
         return out
     }
 
@@ -213,16 +213,28 @@ object Db {
         reminderFired = c.getInt(c.getColumnIndexOrThrow("reminder_fired")) == 1,
     )
 
-    private fun loadChildren(n: Note) {
+    /** Loads items + label ids for a single note (2 queries). */
+    private fun loadChildren(n: Note) = attachChildren(listOf(n))
+
+    /** Attaches items and label ids to a batch of notes with just 2 queries
+     *  total, instead of 2 per note. Selecting every items/note_labels row and
+     *  grouping in memory avoids a dynamic IN(...) clause; the row counts are
+     *  tiny for any realistic note count. */
+    private fun attachChildren(notes: List<Note>) {
+        if (notes.isEmpty()) return
+        val byId = notes.associateBy { it.id }
         db.rawQuery(
-            "SELECT id,text,checked FROM items WHERE note_id=? ORDER BY checked, pos",
-            arrayOf("${n.id}")
+            "SELECT note_id,id,text,checked FROM items ORDER BY note_id, checked, pos",
+            null,
         ).use {
-            while (it.moveToNext())
-                n.items.add(Item(it.getLong(0), it.getString(1) ?: "", it.getInt(2) == 1))
+            while (it.moveToNext()) {
+                byId[it.getLong(0)]?.items?.add(
+                    Item(it.getLong(1), it.getString(2) ?: "", it.getInt(3) == 1)
+                )
+            }
         }
-        db.rawQuery("SELECT label_id FROM note_labels WHERE note_id=?", arrayOf("${n.id}")).use {
-            while (it.moveToNext()) n.labelIds.add(it.getLong(0))
+        db.rawQuery("SELECT note_id,label_id FROM note_labels", null).use {
+            while (it.moveToNext()) byId[it.getLong(0)]?.labelIds?.add(it.getLong(1))
         }
     }
 }
