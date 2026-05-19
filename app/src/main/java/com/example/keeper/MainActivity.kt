@@ -8,6 +8,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Bundle
 import android.os.PowerManager
@@ -18,6 +19,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -107,16 +109,25 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.keeper.theme.KeeperTheme
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -171,7 +182,7 @@ data class Filter(
 /*
  * MainActivity hosts the entire app. There is no ViewModel and no navigation
  * graph: a single `editing` state flips between the note grid and the editor,
- * and the SQLite database is always re-read after a change. Three files, read
+ * and the SQLite database is always re-read after a change. Four files, read
  * top to bottom.
  */
 class MainActivity : ComponentActivity() {
@@ -229,6 +240,10 @@ fun App(openState: androidx.compose.runtime.MutableLongState) {
         notes = Db.notes(filter.archived, filter.reminders, filter.labelId, search)
     }
     LaunchedEffect(filter, search) { reload() }
+
+    // Re-read when a link preview finishes fetching in the background, so a
+    // chip appears on its tile without the user having to reopen the note.
+    LaunchedEffect(LinkPreviews.version.intValue) { reload() }
 
     // Re-read the database whenever the app comes back to the foreground, so
     // changes made by notification actions (snooze/done/repeat) show up.
@@ -480,9 +495,14 @@ fun NoteTile(note: Note, allLabels: List<Label>, modifier: Modifier, onClick: ()
                     Text("+${note.items.size - 8} more", style = MaterialTheme.typography.bodySmall)
             } else if (note.body.isNotBlank()) {
                 Text(
-                    note.body, maxLines = 12, overflow = TextOverflow.Ellipsis,
+                    linkified(note.body, clickable = true),
+                    maxLines = 12, overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.bodyMedium,
                 )
+            }
+            if (note.links.any { it.status == "OK" }) {
+                Spacer(Modifier.height(6.dp))
+                LinkChips(note.links)
             }
             if (note.reminderAt > 0L) {
                 Spacer(Modifier.height(2.dp))
@@ -563,6 +583,83 @@ private fun ReminderChip(
     }
 }
 
+/* ---- link previews ---- */
+
+/** Builds an AnnotatedString that underlines every http(s) URL in `text`.
+ *  When `clickable`, each URL also carries a LinkAnnotation so a tap opens
+ *  the browser — used for the read-only tile body, not the editor field. */
+private fun linkified(text: String, clickable: Boolean): AnnotatedString = buildAnnotatedString {
+    append(text)
+    val underline = SpanStyle(textDecoration = TextDecoration.Underline)
+    LinkPreviews.urlRanges(text).forEach { (start, end) ->
+        addStyle(underline, start, end)
+        if (clickable) addLink(LinkAnnotation.Url(text.substring(start, end)), start, end)
+    }
+}
+
+/** Underlines URLs inside the editor's body field. Length is unchanged, so the
+ *  offset mapping is the identity. */
+private val LinkUnderline = VisualTransformation { original ->
+    TransformedText(linkified(original.text, clickable = false), OffsetMapping.Identity)
+}
+
+/** The Keep-style link preview chip: favicon, page title, domain. Tapping it
+ *  opens the URL. Only OK previews are passed here. */
+@Composable
+private fun LinkChip(link: Link) {
+    val ctx = LocalContext.current
+    val favicon = remember(link.favicon) {
+        link.favicon?.let { BitmapFactory.decodeByteArray(it, 0, it.size)?.asImageBitmap() }
+    }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .clickable {
+                runCatching {
+                    ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link.url)))
+                }
+            }
+            .background(Color.Black.copy(alpha = 0.06f))
+            .padding(8.dp),
+    ) {
+        Box(
+            Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(Color.Black.copy(alpha = 0.06f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (favicon != null) Image(favicon, null, Modifier.size(24.dp))
+        }
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                link.title.ifBlank { link.url },
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 2, overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                link.domain,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+/** Stack of preview chips. A failed (or still-loading) link draws no chip. */
+@Composable
+private fun LinkChips(links: List<Link>, modifier: Modifier = Modifier) {
+    val ready = links.filter { it.status == "OK" }
+    if (ready.isEmpty()) return
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        ready.forEach { LinkChip(it) }
+    }
+}
+
 /* ---- note editor ---- */
 
 @Composable
@@ -583,6 +680,7 @@ fun NoteEditor(
     var reminderRepeat by remember { mutableStateOf(note.reminderRepeat) }
     val items = remember { note.items.toMutableStateList() }
     val labelIds = remember { note.labelIds.toMutableStateList() }
+    var links by remember { mutableStateOf(Db.links(note.id)) }
 
     var menu by remember { mutableStateOf(false) }
     var showReminder by remember { mutableStateOf(false) }
@@ -612,8 +710,27 @@ fun NoteEditor(
         }
     }
 
-    fun saveAndClose() { persist(); onClose() }
+    fun saveAndClose() {
+        persist()
+        // Closing the note is the second fetch trigger (besides the 3 s
+        // debounce); it also reconciles previews when the body emptied.
+        if (note.id != 0L && !Db.isBlank(note)) LinkPreviews.refresh(note.id, body)
+        onClose()
+    }
     BackHandler { saveAndClose() }
+
+    // Pick up previews as their background fetches finish.
+    LaunchedEffect(LinkPreviews.version.intValue) {
+        if (note.id != 0L) links = Db.links(note.id)
+    }
+    // Debounced fetch: 3 s after the body text stops changing. The effect is
+    // restarted on every keystroke, so the fetch only runs once typing settles.
+    LaunchedEffect(body) {
+        if (body.isBlank()) return@LaunchedEffect
+        delay(3000)
+        persist()                       // gives a brand-new note its id first
+        LinkPreviews.refresh(note.id, body)
+    }
 
     val (bg, fg) = noteColors(color)
     Scaffold(
@@ -753,7 +870,16 @@ fun NoteEditor(
                     value = body, onValueChange = { body = it },
                     placeholder = { Text("Note") },
                     colors = clearFieldColors(),
+                    visualTransformation = LinkUnderline,
                     modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp),
+                )
+            }
+
+            // Link preview chips for the URLs in the body, like Keep.
+            if (!checklist) {
+                LinkChips(
+                    links,
+                    Modifier.padding(start = 16.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
                 )
             }
 

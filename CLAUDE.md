@@ -1,13 +1,15 @@
 # Keeper
 
-A self-hosted, fully-offline Android clone of Google Keep: tile-based notes
-with time reminders, backed by a local SQLite database that can be exported and
-imported. No cloud, no inter-app integration, no location reminders.
+A self-hosted Android clone of Google Keep: tile-based notes with time
+reminders, backed by a local SQLite database that can be exported and
+imported. No cloud, no inter-app integration, no location reminders. The one
+network exception is **link previews** — fetching a page title + favicon for
+URLs typed into a note (see below).
 
 ## Design philosophy (respect this when editing)
 
 This codebase is **deliberately flat and anti-fragmented**. The whole app is
-three Kotlin files plus the manifest. There is **no ViewModel, no navigation
+four Kotlin files plus the manifest. There is **no ViewModel, no navigation
 graph, no DAO/Room, no MVC/MVP/MVVM**. God objects are intentional. Keep it
 readable top-to-bottom without IDE navigation. Prefer adding to an existing
 file over creating a new one. Reuse Compose/Material 3 instead of hand-rolling.
@@ -18,20 +20,23 @@ file over creating a new one. Reuse Compose/Material 3 instead of hand-rolling.
 |---|---|
 | `app/src/main/java/com/example/keeper/Db.kt` | `object Db` — raw `SQLiteOpenHelper`. All CRUD/query/backup. Plain `Note`/`Item`/`Label` data classes. The single source of truth. |
 | `.../Notifier.kt` | `object Notifier` + `AlarmReceiver` + `BootReceiver`. Exact-alarm scheduling, repeat math, notification building. |
+| `.../LinkPreviews.kt` | `object LinkPreviews`. Link-preview fetching: URL parsing, debounced `HttpURLConnection` fetch of page title + favicon, link-row reconciliation. |
 | `.../MainActivity.kt` | All Compose UI: note grid, editor, reminder/label dialogs, drawer. State = one `editing: Note?` flips grid↔editor; DB is re-read after every change. |
 | `.../theme/` | Stock Compose Material 3 theme from the template. |
 | `app/src/main/AndroidManifest.xml` | Permissions + receiver registration. |
 
 `MainActivity.kt` is large on purpose — that is the god object.
 
-## Data model (SQLite, 4 tables, schema v2)
+## Data model (SQLite, 5 tables, schema v4)
 
 ```
-notes(id, title, body, checklist, color, pinned, archived,
-      created, modified, reminder_at, reminder_repeat, reminder_fired)
+notes(id, title, body, checklist, color, pinned, archived, created, modified,
+      reminder_at, reminder_repeat, reminder_fired, position)
 items(id, note_id, text, checked, pos)        -- checklist rows, FK cascade
 labels(id, name)
 note_labels(note_id, label_id)                -- FK cascade
+links(id, note_id, url, title, domain, favicon, status)  -- FK cascade,
+                                              -- UNIQUE(note_id, url)
 ```
 
 - One reminder per note (matches Keep). `reminder_repeat` ∈
@@ -60,6 +65,27 @@ re-fires on reboot/app-start. Rules, all enforced in `Notifier`/`Db`:
 Exact alarms use `setExactAndAllowWhileIdle`. The app declares
 `USE_EXACT_ALARM` (install-granted, no prompt) and requests a Doze
 exemption on launch. `BootReceiver` re-arms every reminder after reboot.
+
+## Link previews (important invariant)
+
+URLs in a note body are underlined and get a Keep-style preview chip (favicon,
+page title, domain). The `links` table caches one row per `(note_id, url)`;
+`status` ∈ `LOADING | OK | FAILED`, and **only `OK` rows draw a chip**. Rules,
+enforced in `LinkPreviews`:
+
+- A preview is fetched **once**, when the URL first appears, and **never
+  refreshed**. Editing a URL yields a different URL string, so it is treated
+  as new and fetched fresh; the stale row is dropped by reconciliation.
+- A failed fetch is kept as a `FAILED` row, so a dead link is **not retried**
+  on every keystroke or note close. `refresh()` skips any URL already cached,
+  `OK` *or* `FAILED`.
+- Fetching is triggered by the editor 3 s after the body text stabilises
+  (a restarting `LaunchedEffect(body)` debounce) and again on note close.
+- Work runs on `LinkPreviews`' app-scoped coroutine so a fetch started on
+  close still completes. `LinkPreviews.version` is bumped after every link-row
+  write; the editor and `App` key a `LaunchedEffect` off it to re-read the DB.
+- The "preview" image is just the site favicon (no og:image). A missing
+  favicon is fine — the chip renders a blank box. Requires `INTERNET`.
 
 ## Build & run
 
@@ -109,6 +135,11 @@ Built, deployed, and exercised end-to-end on an Android 36 emulator:
 - `BootReceiver` re-arms all alarms after `adb reboot` (no Activity launched)
 - DB export → valid SQLite file; import → restores a deleted note
 - Schema v1→v2 migration runs on reinstall
+- Link previews: a typed URL is underlined; 3 s later an `OK` chip appears
+  with favicon + page title + domain; the chip persists and shows on the
+  grid tile; tapping it opens the browser. An unresolvable URL becomes a
+  `FAILED` row (no chip) and is not re-fetched on further edits. Schema
+  v3→v4 migration runs on reinstall.
 
 Not UI-tested but identical code paths: the "Done" / "Tomorrow" notification
 actions (same `AlarmReceiver` dispatch as snooze).

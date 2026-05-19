@@ -15,6 +15,18 @@ data class Item(var id: Long = 0, var text: String = "", var checked: Boolean = 
 
 data class Label(val id: Long, val name: String)
 
+/** A cached link preview. `status` ∈ LOADING | OK | FAILED. A preview is
+ *  fetched once when the URL first appears and is never refreshed; a FAILED
+ *  row is kept so the dead link is not re-fetched on every edit. */
+data class Link(
+    var id: Long = 0,
+    var url: String = "",
+    var title: String = "",
+    var domain: String = "",
+    var favicon: ByteArray? = null,
+    var status: String = "LOADING",
+)
+
 data class Note(
     var id: Long = 0,
     var title: String = "",
@@ -31,6 +43,7 @@ data class Note(
     var position: Int = 0,              // manual sort order; lower = higher on screen
     var items: MutableList<Item> = mutableListOf(),
     var labelIds: MutableSet<Long> = mutableSetOf(),
+    var links: MutableList<Link> = mutableListOf(),
 )
 
 /*
@@ -47,7 +60,7 @@ object Db {
     fun init(context: Context) {
         if (::helper.isInitialized) return
         ctx = context.applicationContext
-        helper = object : SQLiteOpenHelper(ctx, NAME, null, 3) {
+        helper = object : SQLiteOpenHelper(ctx, NAME, null, 4) {
             override fun onConfigure(db: SQLiteDatabase) = db.setForeignKeyConstraintsEnabled(true)
             override fun onCreate(db: SQLiteDatabase) {
                 db.execSQL(
@@ -68,10 +81,20 @@ object Db {
                         "FOREIGN KEY(note_id) REFERENCES notes(id) ON DELETE CASCADE, " +
                         "FOREIGN KEY(label_id) REFERENCES labels(id) ON DELETE CASCADE)"
                 )
+                createLinks(db)
             }
             override fun onUpgrade(db: SQLiteDatabase, oldV: Int, newV: Int) {
                 if (oldV < 2) db.execSQL("ALTER TABLE notes ADD COLUMN reminder_fired INTEGER DEFAULT 0")
                 if (oldV < 3) db.execSQL("ALTER TABLE notes ADD COLUMN position INTEGER DEFAULT 0")
+                if (oldV < 4) createLinks(db)
+            }
+            private fun createLinks(db: SQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE links(id INTEGER PRIMARY KEY AUTOINCREMENT, note_id INTEGER, " +
+                        "url TEXT, title TEXT, domain TEXT, favicon BLOB, status TEXT, " +
+                        "FOREIGN KEY(note_id) REFERENCES notes(id) ON DELETE CASCADE)"
+                )
+                db.execSQL("CREATE UNIQUE INDEX idx_links ON links(note_id, url)")
             }
         }
         helper.setWriteAheadLoggingEnabled(false) // keep one consistent file for backup
@@ -199,6 +222,60 @@ object Db {
 
     fun deleteLabel(id: Long) = run { db.delete("labels", "id=?", arrayOf("$id")) }
 
+    /* ----- link previews ----- */
+
+    /** All cached link previews for one note. */
+    fun links(noteId: Long): MutableList<Link> {
+        val out = mutableListOf<Link>()
+        if (noteId == 0L) return out
+        db.rawQuery(
+            "SELECT id,url,title,domain,favicon,status FROM links WHERE note_id=?",
+            arrayOf("$noteId"),
+        ).use {
+            while (it.moveToNext()) out.add(
+                Link(
+                    id = it.getLong(0),
+                    url = it.getString(1) ?: "",
+                    title = it.getString(2) ?: "",
+                    domain = it.getString(3) ?: "",
+                    favicon = if (it.isNull(4)) null else it.getBlob(4),
+                    status = it.getString(5) ?: "FAILED",
+                )
+            )
+        }
+        return out
+    }
+
+    /** Inserts or replaces the preview for (note_id, url). */
+    fun upsertLink(noteId: Long, link: Link) {
+        db.insertWithOnConflict(
+            "links", null,
+            ContentValues().apply {
+                put("note_id", noteId)
+                put("url", link.url)
+                put("title", link.title)
+                put("domain", link.domain)
+                if (link.favicon != null) put("favicon", link.favicon) else putNull("favicon")
+                put("status", link.status)
+            },
+            SQLiteDatabase.CONFLICT_REPLACE,
+        )
+    }
+
+    /** Drops cached previews whose URL is no longer present in the note. */
+    fun deleteLinksNotIn(noteId: Long, urls: Collection<String>) {
+        if (urls.isEmpty()) {
+            db.delete("links", "note_id=?", arrayOf("$noteId"))
+            return
+        }
+        val placeholders = urls.joinToString(",") { "?" }
+        db.delete(
+            "links",
+            "note_id=? AND url NOT IN ($placeholders)",
+            (listOf("$noteId") + urls).toTypedArray(),
+        )
+    }
+
     /* ----- backup / restore (raw file copy) ----- */
 
     fun dbFile(): File = ctx.getDatabasePath(NAME)
@@ -258,6 +335,20 @@ object Db {
         }
         db.rawQuery("SELECT note_id,label_id FROM note_labels", null).use {
             while (it.moveToNext()) byId[it.getLong(0)]?.labelIds?.add(it.getLong(1))
+        }
+        db.rawQuery("SELECT note_id,id,url,title,domain,favicon,status FROM links", null).use {
+            while (it.moveToNext()) {
+                byId[it.getLong(0)]?.links?.add(
+                    Link(
+                        id = it.getLong(1),
+                        url = it.getString(2) ?: "",
+                        title = it.getString(3) ?: "",
+                        domain = it.getString(4) ?: "",
+                        favicon = if (it.isNull(5)) null else it.getBlob(5),
+                        status = it.getString(6) ?: "FAILED",
+                    )
+                )
+            }
         }
     }
 }
