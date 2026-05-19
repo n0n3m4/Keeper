@@ -4,6 +4,7 @@ package com.example.keeper
 
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -189,6 +190,7 @@ fun App(openState: androidx.compose.runtime.MutableLongState) {
     var labels by remember { mutableStateOf(listOf<Label>()) }
     var editing by remember { mutableStateOf<Note?>(null) }
     var showLabelManager by remember { mutableStateOf(false) }
+    var showReliabilityHelp by remember { mutableStateOf(false) }
 
     fun reload() {
         labels = Db.labels()
@@ -312,6 +314,13 @@ fun App(openState: androidx.compose.runtime.MutableLongState) {
                     onClick = { importer.launch(arrayOf("*/*")); scope.launch { drawer.close() } },
                     modifier = Modifier.padding(horizontal = 12.dp),
                 )
+                HorizontalDivider(Modifier.padding(12.dp))
+                NavigationDrawerItem(
+                    label = { Text("Reminder reliability") }, selected = false,
+                    icon = { Icon(Icons.Default.Notifications, null) },
+                    onClick = { showReliabilityHelp = true; scope.launch { drawer.close() } },
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                )
             }
         },
     ) {
@@ -394,6 +403,10 @@ fun App(openState: androidx.compose.runtime.MutableLongState) {
             onChanged = { labels = Db.labels() },
             onDismiss = { showLabelManager = false; reload() },
         )
+    }
+
+    if (showReliabilityHelp) {
+        ReliabilityDialog(onDismiss = { showReliabilityHelp = false })
     }
 }
 
@@ -863,6 +876,90 @@ fun LabelManagerDialog(labels: List<Label>, onChanged: () -> Unit, onDismiss: ()
                 onChanged(); onDismiss()
             }) { Text("Done") }
         },
+    )
+}
+
+/** Help screen explaining how to keep reminders firing on aggressive OEMs
+ *  (Xiaomi/MIUI especially), with shortcuts to the relevant system settings. */
+@Composable
+fun ReliabilityDialog(onDismiss: () -> Unit) {
+    val ctx = LocalContext.current
+    val pkg = ctx.packageName
+
+    // Launches a settings screen; falls back to this app's details page so a
+    // device lacking the target component (e.g. non-MIUI) never crashes.
+    fun open(intent: Intent) {
+        val fallback = Intent(
+            Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$pkg"),
+        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        runCatching { ctx.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            .onFailure { runCatching { ctx.startActivity(fallback) } }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Reminder reliability") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                Text(
+                    "Reminders use exact alarms. Some phones — Xiaomi/MIUI " +
+                        "especially — still freeze the app and delay or drop them. " +
+                        "Grant these so reminders fire on time:",
+                )
+                Spacer(Modifier.height(12.dp))
+                OutlinedButton(
+                    onClick = {
+                        open(
+                            Intent(
+                                Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                                Uri.parse("package:$pkg"),
+                            )
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Battery: set \"No restrictions\"") }
+                OutlinedButton(
+                    onClick = {
+                        open(
+                            Intent().setComponent(
+                                ComponentName(
+                                    "com.miui.securitycenter",
+                                    "com.miui.permcenter.autostart" +
+                                        ".AutoStartManagementActivity",
+                                )
+                            )
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Allow Autostart (MIUI)") }
+                OutlinedButton(
+                    onClick = {
+                        open(
+                            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                                .putExtra(Settings.EXTRA_APP_PACKAGE, pkg)
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Notification settings") }
+                OutlinedButton(
+                    onClick = {
+                        open(
+                            Intent(
+                                Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                                Uri.parse("package:$pkg"),
+                            )
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Allow exact alarms") }
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "Also, in the recent-apps view: lock Keeper (padlock icon) so " +
+                        "the system keeps it running, and don't swipe it away.",
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
     )
 }
 
