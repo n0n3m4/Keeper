@@ -260,21 +260,33 @@ class AlarmReceiver : BroadcastReceiver() {
                 nm.cancel(note.id.toInt())
             }
             Notifier.ACTION_DONE -> {
-                note.reminderAt = 0
-                note.reminderRepeat = "NONE"
-                note.reminderFired = false
-                note.reminderSnoozeAt = 0
-                Db.save(note)
-                Notifier.cancel(ctx, note.id)                  // drop alarm + notification
+                if (note.reminderRepeat != "NONE") {
+                    // The reminder already fired; ReminderService advanced
+                    // reminderAt to the next occurrence and re-armed it. "Done"
+                    // completes just this occurrence — dismiss the notification
+                    // and leave the recurrence intact.
+                    nm.cancel(note.id.toInt())
+                } else {
+                    note.reminderAt = 0
+                    note.reminderRepeat = "NONE"
+                    note.reminderFired = false
+                    note.reminderSnoozeAt = 0
+                    Db.save(note)
+                    Notifier.cancel(ctx, note.id)              // drop alarm + notification
+                }
             }
         }
     }
 }
 
-/* Re-arms all reminders after the device reboots. */
+/* Re-arms all reminders after the device reboots — and after an app update,
+ * which the OS likewise clears every alarm on. MY_PACKAGE_REPLACED is delivered
+ * to our own package once the new version is installed. */
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
-        if (intent.action == Intent.ACTION_BOOT_COMPLETED) Notifier.rescheduleAll(ctx)
+        if (intent.action == Intent.ACTION_BOOT_COMPLETED ||
+            intent.action == Intent.ACTION_MY_PACKAGE_REPLACED
+        ) Notifier.rescheduleAll(ctx)
     }
 }
 
