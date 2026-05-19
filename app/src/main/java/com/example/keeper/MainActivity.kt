@@ -25,6 +25,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
@@ -33,6 +34,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -51,11 +53,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
@@ -65,7 +69,6 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -103,6 +106,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.keeper.theme.KeeperTheme
@@ -120,13 +125,34 @@ val NoteColors = listOf(
     0xFFD4E4EDL, 0xFFAECCDCL, 0xFFD3BFDBL, 0xFFF6E2DDL, 0xFFE9E3D4L, 0xFFEFEFF1L,
 )
 
-// Repeat code -> human label. Matches the recurrence options Google Keep offered.
+// Fixed recurrence rows for the Repeat dropdown. Custom intervals use the
+// "EVERY:<n>:<unit>" code (see Notifier.repeatStep) and aren't listed here.
 val Repeats = listOf(
     "NONE" to "Does not repeat", "DAILY" to "Daily", "WEEKLY" to "Weekly",
     "MONTHLY" to "Monthly", "YEARLY" to "Yearly",
 )
 
 private fun fmt(ms: Long) = SimpleDateFormat("MMM d, HH:mm", Locale.getDefault()).format(Date(ms))
+
+/** Human label for any repeat code, including custom "EVERY:<n>:<unit>". */
+fun repeatLabel(code: String): String = when {
+    code == "DAILY" -> "Daily"
+    code == "WEEKLY" -> "Weekly"
+    code == "MONTHLY" -> "Monthly"
+    code == "YEARLY" -> "Yearly"
+    code.startsWith("EVERY:") -> runCatching {
+        val (_, n, unit) = code.split(":")
+        val u = when (unit) { "DAY" -> "day"; "WEEK" -> "week"; "MONTH" -> "month"
+                              else -> "year" }
+        "Every $n $u" + if (n.toInt() != 1) "s" else ""
+    }.getOrDefault("Does not repeat")
+    else -> "Does not repeat"   // NONE
+}
+
+/** A reminder is "spent" — and shown dimmed — once a one-time reminder has
+ *  fired or its time has passed. Repeating reminders are always live. */
+fun reminderInactive(at: Long, repeat: String, fired: Boolean): Boolean =
+    repeat == "NONE" && (fired || at <= System.currentTimeMillis())
 
 /** Which drawer view is showing. One object drives the whole note query. */
 data class Filter(
@@ -453,8 +479,13 @@ fun NoteTile(note: Note, allLabels: List<Label>, modifier: Modifier, onClick: ()
                 )
             }
             if (note.reminderAt > 0L) {
-                Spacer(Modifier.height(6.dp))
-                Chip(Icons.Default.Notifications, fmt(note.reminderAt))
+                Spacer(Modifier.height(2.dp))
+                ReminderChip(
+                    note.reminderAt, note.reminderRepeat,
+                    dimmed = reminderInactive(
+                        note.reminderAt, note.reminderRepeat, note.reminderFired,
+                    ),
+                )
             }
             val tileLabels = allLabels.filter { it.id in note.labelIds }
             if (tileLabels.isNotEmpty()) {
@@ -487,6 +518,45 @@ private fun Chip(
     }
 }
 
+/** The reminder chip shown on a note tile and in the editor — larger than a
+ *  label chip, and dimmed with a strikethrough once the reminder is spent. */
+@Composable
+private fun ReminderChip(
+    at: Long,
+    repeat: String,
+    dimmed: Boolean,
+    onClick: (() -> Unit)? = null,
+) {
+    val content =
+        if (dimmed) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
+        else MaterialTheme.colorScheme.onSurface
+    val bg =
+        if (dimmed) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)
+        else Color.Black.copy(alpha = 0.08f)
+    val label = fmt(at) + if (repeat == "NONE") "" else " · ${repeatLabel(repeat)}"
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .clip(RoundedCornerShape(16.dp))
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .background(bg)
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+    ) {
+        Icon(Icons.Default.Notifications, null, Modifier.size(18.dp), tint = content)
+        Spacer(Modifier.width(6.dp))
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = content,
+            textDecoration = if (dimmed) TextDecoration.LineThrough else null,
+        )
+        if (repeat != "NONE") {
+            Spacer(Modifier.width(6.dp))
+            Icon(Icons.Default.Refresh, null, Modifier.size(16.dp), tint = content)
+        }
+    }
+}
+
 /* ---- note editor ---- */
 
 @Composable
@@ -511,6 +581,7 @@ fun NoteEditor(
     var menu by remember { mutableStateOf(false) }
     var showReminder by remember { mutableStateOf(false) }
     var showLabels by remember { mutableStateOf(false) }
+    var showColors by remember { mutableStateOf(false) }
 
     fun persist() {
         val newRepeat = if (reminderAt > 0L) reminderRepeat else "NONE"
@@ -564,6 +635,21 @@ fun NoteEditor(
                     IconButton(onClick = { showReminder = true }) {
                         Icon(Icons.Default.Notifications, "Reminder")
                     }
+                    // Colour picking is rare, so it hides behind this button —
+                    // the swatch shows the current colour and toggles the strip.
+                    IconButton(onClick = { showColors = !showColors }) {
+                        Box(
+                            Modifier
+                                .size(20.dp)
+                                .clip(CircleShape)
+                                .background(if (color == 0) bg else Color(NoteColors[color]))
+                                .border(
+                                    width = if (showColors) 2.dp else 1.dp,
+                                    color = fg.copy(alpha = if (showColors) 1f else 0.5f),
+                                    shape = CircleShape,
+                                ),
+                        )
+                    }
                     IconButton(onClick = { menu = true }) {
                         Icon(Icons.Default.MoreVert, "More")
                     }
@@ -606,7 +692,7 @@ fun NoteEditor(
                 },
             )
         },
-        bottomBar = { ColorBar(color) { color = it } },
+        bottomBar = { if (showColors) ColorBar(color) { color = it } },
     ) { pad ->
         Column(
             Modifier
@@ -653,18 +739,17 @@ fun NoteEditor(
                     value = body, onValueChange = { body = it },
                     placeholder = { Text("Note") },
                     colors = clearFieldColors(),
-                    modifier = Modifier.fillMaxWidth().height(360.dp),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp),
                 )
             }
 
             // Reminder + labels live below the title and the note text, like
             // Keep. The reminder chip is tappable — it opens the same dialog.
             if (reminderAt > 0L) {
-                Row(Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp)) {
-                    Chip(
-                        Icons.Default.Notifications,
-                        fmt(reminderAt) + (Repeats.first { it.first == reminderRepeat }
-                            .second.let { if (reminderRepeat == "NONE") "" else " · $it" }),
+                Row(Modifier.padding(start = 16.dp, top = 2.dp, bottom = 4.dp)) {
+                    ReminderChip(
+                        reminderAt, reminderRepeat,
+                        dimmed = reminderInactive(reminderAt, reminderRepeat, note.reminderFired),
                         onClick = { showReminder = true },
                     )
                 }
@@ -742,38 +827,178 @@ fun ReminderDialog(
     val ctx = LocalContext.current
     var time by remember { mutableLongStateOf(if (at > 0L) at else preset(18, 0)) }
     var rep by remember { mutableStateOf(repeat) }
+    var showCustom by remember { mutableStateOf(false) }
+
+    val dateFmt = remember { SimpleDateFormat("EEE, MMM d", Locale.getDefault()) }
+    val timeFmt = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+    val weekday = remember { SimpleDateFormat("EEEE", Locale.getDefault()).format(Date()) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Reminder") },
         text = {
+            // Date / time / repeat are dropdowns of common presets, each with a
+            // custom escape hatch — the everyday case is one or two taps.
             Column {
-                Text(fmt(time), style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(8.dp))
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    OutlinedButton(onClick = { time = preset(18, 0) }) { Text("Evening") }
-                    OutlinedButton(onClick = { time = preset(8, 1) }) { Text("Tomorrow") }
-                    OutlinedButton(onClick = { time = preset(8, 7) }) { Text("Next week") }
+                DropdownField("Date", dateFmt.format(Date(time))) { close ->
+                    DropdownMenuItem(
+                        text = { Text("Today") },
+                        onClick = { time = withDate(time, 0); close() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Tomorrow") },
+                        onClick = { time = withDate(time, 1); close() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Next $weekday") },
+                        onClick = { time = withDate(time, 7); close() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Pick a date…") },
+                        onClick = { close(); pickDate(ctx, time) { time = it } },
+                    )
                 }
-                TextButton(onClick = { pickDateTime(ctx, time) { time = it } }) {
-                    Text("Pick date & time…")
+                DropdownField("Time", timeFmt.format(Date(time))) { close ->
+                    DropdownMenuItem(
+                        text = { Text("Morning · 08:00") },
+                        onClick = { time = withTime(time, 8, 0); close() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Afternoon · 13:00") },
+                        onClick = { time = withTime(time, 13, 0); close() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Evening · 18:00") },
+                        onClick = { time = withTime(time, 18, 0); close() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Pick a time…") },
+                        onClick = { close(); pickTime(ctx, time) { time = it } },
+                    )
                 }
-                Spacer(Modifier.height(8.dp))
-                Text("Repeat", style = MaterialTheme.typography.labelLarge)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                DropdownField("Repeat", repeatLabel(rep)) { close ->
                     Repeats.forEach { (code, label) ->
-                        FilterChip(
-                            selected = rep == code,
-                            onClick = { rep = code },
-                            label = { Text(label) },
+                        DropdownMenuItem(
+                            text = { Text(label) },
+                            onClick = { rep = code; close() },
                         )
                     }
+                    DropdownMenuItem(
+                        text = { Text("Custom interval…") },
+                        onClick = { close(); showCustom = true },
+                    )
                 }
-                Spacer(Modifier.height(8.dp))
-                TextButton(onClick = onRemove) { Text("Remove reminder") }
             }
         },
         confirmButton = { TextButton(onClick = { onSet(time, rep) }) { Text("Save") } },
+        dismissButton = {
+            Row {
+                if (at > 0L) TextButton(onClick = onRemove) { Text("Remove") }
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+            }
+        },
+    )
+
+    if (showCustom) {
+        CustomIntervalDialog(
+            initial = rep,
+            onSet = { rep = it; showCustom = false },
+            onDismiss = { showCustom = false },
+        )
+    }
+}
+
+/** A labelled field that opens a dropdown of choices when tapped. The [menu]
+ *  lambda fills it with DropdownMenuItems and gets a [close] callback. */
+@Composable
+fun DropdownField(
+    label: String,
+    value: String,
+    menu: @Composable ColumnScope.(close: () -> Unit) -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
+    Column(Modifier.padding(vertical = 4.dp)) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Box {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(4.dp))
+                    .clickable { open = true }
+                    .padding(vertical = 10.dp, horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    value,
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.weight(1f),
+                )
+                Icon(Icons.Default.ArrowDropDown, "Open")
+            }
+            DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                menu { open = false }
+            }
+        }
+        HorizontalDivider()
+    }
+}
+
+/** Builds an "EVERY:<n>:<unit>" repeat code from a count + unit. */
+@Composable
+fun CustomIntervalDialog(
+    initial: String,
+    onSet: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val units = listOf(
+        "DAY" to "days", "WEEK" to "weeks", "MONTH" to "months", "YEAR" to "years",
+    )
+    // Re-editing an existing custom interval keeps its current value.
+    val parsed = remember {
+        initial.takeIf { it.startsWith("EVERY:") }?.split(":")?.takeIf { it.size == 3 }
+    }
+    var count by remember { mutableStateOf(parsed?.get(1) ?: "2") }
+    var unit by remember { mutableStateOf(parsed?.get(2)?.takeIf { u -> units.any { it.first == u } } ?: "WEEK") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Custom interval") },
+        text = {
+            Column {
+                Text("Repeat every", style = MaterialTheme.typography.labelMedium)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextField(
+                        value = count,
+                        onValueChange = { v -> count = v.filter { it.isDigit() }.take(3) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.width(96.dp),
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Box(Modifier.weight(1f)) {
+                        DropdownField("Unit", units.first { it.first == unit }.second) { close ->
+                            units.forEach { (code, name) ->
+                                DropdownMenuItem(
+                                    text = { Text(name) },
+                                    onClick = { unit = code; close() },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                // A zero/blank count would make the scheduler loop forever.
+                val n = (count.toIntOrNull() ?: 1).coerceAtLeast(1)
+                onSet("EVERY:$n:$unit")
+            }) { Text("Save") }
+        },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }
@@ -988,25 +1213,48 @@ fun preset(hour: Int, addDays: Int): Long = Calendar.getInstance().apply {
     set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
 }.timeInMillis
 
-/** Chains the platform date + time pickers and reports the chosen instant. */
-fun pickDateTime(ctx: Context, initial: Long, onPicked: (Long) -> Unit) {
-    val c = Calendar.getInstance().apply {
-        timeInMillis = if (initial > 0L) initial else System.currentTimeMillis()
-    }
+/** Today (+[addDaysFromToday]) at the time-of-day carried by [ms]. */
+fun withDate(ms: Long, addDaysFromToday: Int): Long {
+    val src = Calendar.getInstance().apply { timeInMillis = ms }
+    return Calendar.getInstance().apply {
+        add(Calendar.DAY_OF_MONTH, addDaysFromToday)
+        set(Calendar.HOUR_OF_DAY, src.get(Calendar.HOUR_OF_DAY))
+        set(Calendar.MINUTE, src.get(Calendar.MINUTE))
+        set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+}
+
+/** The date of [ms] at [hour]:[minute]. */
+fun withTime(ms: Long, hour: Int, minute: Int): Long =
+    Calendar.getInstance().apply {
+        timeInMillis = ms
+        set(Calendar.HOUR_OF_DAY, hour); set(Calendar.MINUTE, minute)
+        set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+
+/** Platform date picker — applies only Y/M/D to [initial], keeping its time. */
+fun pickDate(ctx: Context, initial: Long, onPicked: (Long) -> Unit) {
+    val c = Calendar.getInstance().apply { timeInMillis = initial }
     DatePickerDialog(
         ctx,
         { _, y, m, d ->
             c.set(Calendar.YEAR, y); c.set(Calendar.MONTH, m); c.set(Calendar.DAY_OF_MONTH, d)
-            TimePickerDialog(
-                ctx,
-                { _, h, min ->
-                    c.set(Calendar.HOUR_OF_DAY, h); c.set(Calendar.MINUTE, min)
-                    c.set(Calendar.SECOND, 0); c.set(Calendar.MILLISECOND, 0)
-                    onPicked(c.timeInMillis)
-                },
-                c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE), true,
-            ).show()
+            onPicked(c.timeInMillis)
         },
         c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DAY_OF_MONTH),
+    ).show()
+}
+
+/** Platform time picker — applies only H/M to [initial], keeping its date. */
+fun pickTime(ctx: Context, initial: Long, onPicked: (Long) -> Unit) {
+    val c = Calendar.getInstance().apply { timeInMillis = initial }
+    TimePickerDialog(
+        ctx,
+        { _, h, min ->
+            c.set(Calendar.HOUR_OF_DAY, h); c.set(Calendar.MINUTE, min)
+            c.set(Calendar.SECOND, 0); c.set(Calendar.MILLISECOND, 0)
+            onPicked(c.timeInMillis)
+        },
+        c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE), true,
     ).show()
 }

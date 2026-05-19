@@ -99,18 +99,32 @@ object Notifier {
         Db.withReminders().forEach { schedule(ctx, it) }
     }
 
+    /** (Calendar field, amount) for a repeat code; null = non-repeating/unknown.
+     *  Legacy codes (DAILY/WEEKLY/...) and custom "EVERY:<n>:<unit>" intervals
+     *  both resolve here, so they share one scheduling path. */
+    fun repeatStep(repeat: String): Pair<Int, Int>? = when {
+        repeat == "DAILY" -> Calendar.DAY_OF_MONTH to 1
+        repeat == "WEEKLY" -> Calendar.DAY_OF_MONTH to 7
+        repeat == "MONTHLY" -> Calendar.MONTH to 1
+        repeat == "YEARLY" -> Calendar.YEAR to 1
+        repeat.startsWith("EVERY:") -> runCatching {
+            val (_, n, unit) = repeat.split(":")
+            when (unit) {
+                "DAY" -> Calendar.DAY_OF_MONTH to n.toInt()
+                "WEEK" -> Calendar.DAY_OF_MONTH to n.toInt() * 7
+                "MONTH" -> Calendar.MONTH to n.toInt()
+                "YEAR" -> Calendar.YEAR to n.toInt()
+                else -> null
+            }
+        }.getOrNull()
+        else -> null   // NONE or malformed
+    }
+
     /** Next occurrence of a repeating reminder, skipping any already in the past. */
     fun next(at: Long, repeat: String): Long {
-        if (repeat == "NONE") return 0L
+        val (field, amount) = repeatStep(repeat) ?: return 0L
         val c = Calendar.getInstance().apply { timeInMillis = at }
-        fun step() = when (repeat) {
-            "DAILY" -> c.add(Calendar.DAY_OF_MONTH, 1)
-            "WEEKLY" -> c.add(Calendar.DAY_OF_MONTH, 7)
-            "MONTHLY" -> c.add(Calendar.MONTH, 1)
-            "YEARLY" -> c.add(Calendar.YEAR, 1)
-            else -> {}
-        }
-        do step() while (c.timeInMillis <= System.currentTimeMillis())
+        do c.add(field, amount) while (c.timeInMillis <= System.currentTimeMillis())
         return c.timeInMillis
     }
 
