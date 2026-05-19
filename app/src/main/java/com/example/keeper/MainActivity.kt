@@ -38,6 +38,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.items
+import androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyStaggeredGridState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -247,6 +250,13 @@ fun App(openState: androidx.compose.runtime.MutableLongState) {
         return
     }
 
+    // Drag-to-reorder state for the note grid. onMove rearranges the in-memory
+    // list for a smooth animation; the new order is persisted on drag release.
+    val gridState = rememberLazyStaggeredGridState()
+    val reorderState = rememberReorderableLazyStaggeredGridState(gridState) { from, to ->
+        notes = notes.toMutableList().apply { add(to.index, removeAt(from.index)) }
+    }
+
     ModalNavigationDrawer(
         drawerState = drawer,
         drawerContent = {
@@ -339,8 +349,11 @@ fun App(openState: androidx.compose.runtime.MutableLongState) {
                 )
             },
             floatingActionButton = {
-                FloatingActionButton(onClick = { editing = Note() }) {
-                    Icon(Icons.Default.Add, "New note")
+                // No "create" button in Archive — a new note is never archived.
+                if (!filter.archived) {
+                    FloatingActionButton(onClick = { editing = Note() }) {
+                        Icon(Icons.Default.Add, "New note")
+                    }
                 }
             },
         ) { pad ->
@@ -353,6 +366,7 @@ fun App(openState: androidx.compose.runtime.MutableLongState) {
                 }
             } else {
                 LazyVerticalStaggeredGrid(
+                    state = gridState,
                     columns = StaggeredGridCells.Fixed(2),
                     modifier = Modifier.fillMaxSize().padding(pad),
                     contentPadding = PaddingValues(8.dp),
@@ -360,7 +374,14 @@ fun App(openState: androidx.compose.runtime.MutableLongState) {
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     items(notes, key = { it.id }) { note ->
-                        NoteTile(note, labels, Modifier.animateItem()) { editing = note }
+                        ReorderableItem(reorderState, key = note.id) {
+                            NoteTile(
+                                note, labels,
+                                Modifier.longPressDraggableHandle(
+                                    onDragStopped = { Db.reorder(notes.map { it.id }) },
+                                ),
+                            ) { editing = note }
+                        }
                     }
                 }
             }
@@ -393,7 +414,7 @@ fun NoteTile(note: Note, allLabels: List<Label>, modifier: Modifier, onClick: ()
             Row(verticalAlignment = Alignment.Top) {
                 if (note.title.isNotBlank()) {
                     Text(
-                        note.title, fontWeight = FontWeight.Bold,
+                        note.title, style = MaterialTheme.typography.titleMedium,
                         maxLines = 2, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
                     )
@@ -434,11 +455,16 @@ fun NoteTile(note: Note, allLabels: List<Label>, modifier: Modifier, onClick: ()
 }
 
 @Composable
-private fun Chip(icon: androidx.compose.ui.graphics.vector.ImageVector, text: String) {
+private fun Chip(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    text: String,
+    onClick: (() -> Unit)? = null,
+) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .clip(RoundedCornerShape(12.dp))
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .background(Color.Black.copy(alpha = 0.08f))
             .padding(horizontal = 8.dp, vertical = 4.dp),
     ) {
@@ -582,23 +608,6 @@ fun NoteEditor(
                 colors = clearFieldColors(), modifier = Modifier.fillMaxWidth(),
                 textStyle = MaterialTheme.typography.titleLarge,
             )
-            if (reminderAt > 0L) {
-                Row(Modifier.padding(start = 16.dp, top = 4.dp, bottom = 4.dp)) {
-                    Chip(
-                        Icons.Default.Notifications,
-                        fmt(reminderAt) + (Repeats.first { it.first == reminderRepeat }
-                            .second.let { if (reminderRepeat == "NONE") "" else " · $it" }),
-                    )
-                }
-            }
-            val noteLabels = labels.filter { it.id in labelIds }
-            if (noteLabels.isNotEmpty()) {
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.padding(start = 16.dp, bottom = 4.dp),
-                ) { noteLabels.forEach { Chip(Icons.AutoMirrored.Filled.List, it.name) } }
-            }
-
             if (checklist) {
                 items.forEachIndexed { i, item ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -633,6 +642,26 @@ fun NoteEditor(
                     colors = clearFieldColors(),
                     modifier = Modifier.fillMaxWidth().height(360.dp),
                 )
+            }
+
+            // Reminder + labels live below the title and the note text, like
+            // Keep. The reminder chip is tappable — it opens the same dialog.
+            if (reminderAt > 0L) {
+                Row(Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp)) {
+                    Chip(
+                        Icons.Default.Notifications,
+                        fmt(reminderAt) + (Repeats.first { it.first == reminderRepeat }
+                            .second.let { if (reminderRepeat == "NONE") "" else " · $it" }),
+                        onClick = { showReminder = true },
+                    )
+                }
+            }
+            val noteLabels = labels.filter { it.id in labelIds }
+            if (noteLabels.isNotEmpty()) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.padding(start = 16.dp, bottom = 4.dp),
+                ) { noteLabels.forEach { Chip(Icons.AutoMirrored.Filled.List, it.name) } }
             }
         }
     }

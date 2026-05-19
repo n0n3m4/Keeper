@@ -28,6 +28,7 @@ data class Note(
     var reminderAt: Long = 0,           // epoch ms; 0 = no reminder
     var reminderRepeat: String = "NONE",// NONE | DAILY | WEEKLY | MONTHLY | YEARLY
     var reminderFired: Boolean = false, // a one-time reminder that already went off
+    var position: Int = 0,              // manual sort order; lower = higher on screen
     var items: MutableList<Item> = mutableListOf(),
     var labelIds: MutableSet<Long> = mutableSetOf(),
 )
@@ -46,14 +47,14 @@ object Db {
     fun init(context: Context) {
         if (::helper.isInitialized) return
         ctx = context.applicationContext
-        helper = object : SQLiteOpenHelper(ctx, NAME, null, 2) {
+        helper = object : SQLiteOpenHelper(ctx, NAME, null, 3) {
             override fun onConfigure(db: SQLiteDatabase) = db.setForeignKeyConstraintsEnabled(true)
             override fun onCreate(db: SQLiteDatabase) {
                 db.execSQL(
                     "CREATE TABLE notes(id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, body TEXT, " +
                         "checklist INTEGER, color INTEGER, pinned INTEGER, archived INTEGER, " +
                         "created INTEGER, modified INTEGER, reminder_at INTEGER, reminder_repeat TEXT, " +
-                        "reminder_fired INTEGER DEFAULT 0)"
+                        "reminder_fired INTEGER DEFAULT 0, position INTEGER DEFAULT 0)"
                 )
                 db.execSQL(
                     "CREATE TABLE items(id INTEGER PRIMARY KEY AUTOINCREMENT, note_id INTEGER, " +
@@ -70,6 +71,7 @@ object Db {
             }
             override fun onUpgrade(db: SQLiteDatabase, oldV: Int, newV: Int) {
                 if (oldV < 2) db.execSQL("ALTER TABLE notes ADD COLUMN reminder_fired INTEGER DEFAULT 0")
+                if (oldV < 3) db.execSQL("ALTER TABLE notes ADD COLUMN position INTEGER DEFAULT 0")
             }
         }
         helper.setWriteAheadLoggingEnabled(false) // keep one consistent file for backup
@@ -96,7 +98,7 @@ object Db {
         }
         val out = mutableListOf<Note>()
         db.rawQuery(
-            "SELECT * FROM notes WHERE $where ORDER BY pinned DESC, modified DESC",
+            "SELECT * FROM notes WHERE $where ORDER BY pinned DESC, position ASC",
             args.toTypedArray()
         ).use { while (it.moveToNext()) out.add(readNote(it)) }
         attachChildren(out)
@@ -124,6 +126,10 @@ object Db {
         val now = System.currentTimeMillis()
         if (n.created == 0L) n.created = now
         n.modified = now
+        if (n.id == 0L) {                       // a new note lands on top, like Keep
+            n.position = db.rawQuery("SELECT IFNULL(MIN(position),0) FROM notes", null)
+                .use { it.moveToFirst(); it.getInt(0) } - 1
+        }
         val v = ContentValues().apply {
             put("title", n.title); put("body", n.body)
             put("checklist", if (n.checklist) 1 else 0)
@@ -133,6 +139,7 @@ object Db {
             put("created", n.created); put("modified", n.modified)
             put("reminder_at", n.reminderAt); put("reminder_repeat", n.reminderRepeat)
             put("reminder_fired", if (n.reminderFired) 1 else 0)
+            put("position", n.position)
         }
         if (n.id == 0L) n.id = db.insert("notes", null, v)
         else db.update("notes", v, "id=?", arrayOf("${n.id}"))
@@ -154,6 +161,20 @@ object Db {
     }
 
     fun delete(id: Long) = run { db.delete("notes", "id=?", arrayOf("$id")) }
+
+    /** Persists a manual ordering — `ids` is the notes top-to-bottom on screen. */
+    fun reorder(ids: List<Long>) {
+        db.beginTransaction()
+        try {
+            ids.forEachIndexed { i, id ->
+                db.update("notes", ContentValues().apply { put("position", i) },
+                    "id=?", arrayOf("$id"))
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
 
     /** True when the note holds no text/items — used to discard empty drafts. */
     fun isBlank(n: Note) =
@@ -211,6 +232,7 @@ object Db {
         reminderAt = c.getLong(c.getColumnIndexOrThrow("reminder_at")),
         reminderRepeat = c.getString(c.getColumnIndexOrThrow("reminder_repeat")) ?: "NONE",
         reminderFired = c.getInt(c.getColumnIndexOrThrow("reminder_fired")) == 1,
+        position = c.getInt(c.getColumnIndexOrThrow("position")),
     )
 
     /** Loads items + label ids for a single note (2 queries). */
@@ -224,7 +246,8 @@ object Db {
         if (notes.isEmpty()) return
         val byId = notes.associateBy { it.id }
         db.rawQuery(
-            "SELECT note_id,id,text,checked FROM items ORDER BY note_id, checked, pos",
+            // ordered by pos only — checked items keep their place, never resort
+            "SELECT note_id,id,text,checked FROM items ORDER BY note_id, pos",
             null,
         ).use {
             while (it.moveToNext()) {

@@ -55,6 +55,7 @@ dependencies {
   implementation(libs.androidx.compose.material3)
   implementation("androidx.compose.foundation:foundation")
   implementation("androidx.compose.material:material-icons-core")
+  implementation("sh.calvin.reorderable:reorderable:2.5.1")
 
   debugImplementation(libs.androidx.compose.ui.tooling)
 }
