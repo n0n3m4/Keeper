@@ -125,7 +125,7 @@ val Repeats = listOf(
     "MONTHLY" to "Monthly", "YEARLY" to "Yearly",
 )
 
-private fun fmt(ms: Long) = SimpleDateFormat("MMM d, h:mm a", Locale.getDefault()).format(Date(ms))
+private fun fmt(ms: Long) = SimpleDateFormat("MMM d, HH:mm", Locale.getDefault()).format(Date(ms))
 
 /** Which drawer view is showing. One object drives the whole note query. */
 data class Filter(
@@ -907,7 +907,7 @@ fun pickDateTime(ctx: Context, initial: Long, onPicked: (Long) -> Unit) {
                     c.set(Calendar.SECOND, 0); c.set(Calendar.MILLISECOND, 0)
                     onPicked(c.timeInMillis)
                 },
-                c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE), false,
+                c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE), true,
             ).show()
         },
         c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DAY_OF_MONTH),

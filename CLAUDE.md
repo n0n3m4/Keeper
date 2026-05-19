@@ -115,10 +115,4 @@ actions (same `AlarmReceiver` dispatch as snooze).
 
 ## Conventions
 
-- After any DB mutation, call `reload()` (grid) so the UI reflects it. The
-  app also reloads on `ON_RESUME` to pick up notification-driven changes.
-- Notification/alarm `PendingIntent` request codes are `noteId*10 + slot`
-  (slot 0 = fire alarm, 1-3 = action buttons, 5 = content tap). Keep them
-  unique per (note, action) — `PendingIntent` equality ignores extras.
-- New top-level reminder behavior goes in `Notifier`; new screens/dialogs go
-  in `MainActivity.kt`; new persistence goes in `Db`.
+- Always commit to master
