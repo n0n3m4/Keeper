@@ -31,13 +31,16 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.items
@@ -103,6 +106,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -635,21 +641,6 @@ fun NoteEditor(
                     IconButton(onClick = { showReminder = true }) {
                         Icon(Icons.Default.Notifications, "Reminder")
                     }
-                    // Colour picking is rare, so it hides behind this button —
-                    // the swatch shows the current colour and toggles the strip.
-                    IconButton(onClick = { showColors = !showColors }) {
-                        Box(
-                            Modifier
-                                .size(20.dp)
-                                .clip(CircleShape)
-                                .background(if (color == 0) bg else Color(NoteColors[color]))
-                                .border(
-                                    width = if (showColors) 2.dp else 1.dp,
-                                    color = fg.copy(alpha = if (showColors) 1f else 0.5f),
-                                    shape = CircleShape,
-                                ),
-                        )
-                    }
                     IconButton(onClick = { menu = true }) {
                         Icon(Icons.Default.MoreVert, "More")
                     }
@@ -692,7 +683,30 @@ fun NoteEditor(
                 },
             )
         },
-        bottomBar = { if (showColors) ColorBar(color) { color = it } },
+        // Like Keep, the palette lives in a bottom bar. The bar is inset past
+        // the system navigation buttons so neither it nor the colour strip is
+        // ever drawn behind them.
+        bottomBar = {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .background(bg)
+                    .windowInsetsPadding(WindowInsets.navigationBars),
+            ) {
+                if (showColors) ColorBar(color) { color = it }
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(onClick = { showColors = !showColors }) {
+                        Icon(
+                            PaletteIcon, "Color",
+                            tint = if (showColors) fg else fg.copy(alpha = 0.7f),
+                        )
+                    }
+                }
+            }
+        },
     ) { pad ->
         Column(
             Modifier
@@ -780,6 +794,28 @@ fun NoteEditor(
             onDismiss = { showLabels = false },
         )
     }
+}
+
+/** The Material "palette" icon. It lives in material-icons-extended, which
+ *  isn't a dependency, so the vector is defined inline here. */
+private val PaletteIcon: ImageVector by lazy {
+    ImageVector.Builder(
+        name = "Palette", defaultWidth = 24.dp, defaultHeight = 24.dp,
+        viewportWidth = 24f, viewportHeight = 24f,
+    ).apply {
+        addPath(
+            pathData = PathParser().parsePathString(
+                "M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39" +
+                    "-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0" +
+                    "-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5" +
+                    " 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33" +
+                    " 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8" +
+                    " 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5" +
+                    "-1.5 1.5z",
+            ).toNodes(),
+            fill = SolidColor(Color.Black),
+        )
+    }.build()
 }
 
 /** The palette strip pinned to the bottom of the editor. */

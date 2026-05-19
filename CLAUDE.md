@@ -116,3 +116,5 @@ actions (same `AlarmReceiver` dispatch as snooze).
 ## Conventions
 
 - Always commit to master
+- Autocommit all changes if no conflicts
+- Autocommit CLAUDE.md if changed, don't ask
