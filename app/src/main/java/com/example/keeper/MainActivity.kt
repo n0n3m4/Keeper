@@ -690,8 +690,10 @@ fun NoteEditor(
     fun persist() {
         val newRepeat = if (reminderAt > 0L) reminderRepeat else "NONE"
         // A changed reminder time/recurrence is a fresh reminder: let it fire again.
-        if (note.reminderAt != reminderAt || note.reminderRepeat != newRepeat)
+        if (note.reminderAt != reminderAt || note.reminderRepeat != newRepeat) {
             note.reminderFired = false
+            note.reminderSnoozeAt = 0L         // a fresh reminder drops any pending snooze
+        }
         note.title = title.trim()
         note.body = body
         note.checklist = checklist

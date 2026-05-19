@@ -86,10 +86,21 @@ object Notifier {
             AlarmManager.AlarmClockInfo(note.reminderAt, showPending(ctx, note.id)),
             firePending(ctx, note.id),
         )
+        // A temporary snooze of a repeating reminder rides on its own alarm so
+        // the repeat schedule (note.reminderAt) is left untouched.
+        if (note.reminderSnoozeAt > 0L) {
+            am(ctx).setAlarmClock(
+                AlarmManager.AlarmClockInfo(note.reminderSnoozeAt, showPending(ctx, note.id)),
+                snoozeFirePending(ctx, note.id),
+            )
+        } else {
+            am(ctx).cancel(snoozeFirePending(ctx, note.id))
+        }
     }
 
     fun cancel(ctx: Context, noteId: Long) {
         am(ctx).cancel(firePending(ctx, noteId))
+        am(ctx).cancel(snoozeFirePending(ctx, noteId))
         nm(ctx).cancel(noteId.toInt())
     }
 
@@ -178,6 +189,16 @@ object Notifier {
         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
     )
 
+    /** The fire alarm for a temporary snooze — a distinct request code so it
+     *  coexists with the repeat alarm; the `snooze` extra tells the receiver to
+     *  deliver without advancing the repeat schedule. */
+    private fun snoozeFirePending(ctx: Context, noteId: Long) = PendingIntent.getBroadcast(
+        ctx, code(noteId, 4),
+        Intent(ctx, AlarmReceiver::class.java)
+            .setAction(ACTION_FIRE).putExtra("note", noteId).putExtra("snooze", true),
+        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+    )
+
     /** Opens the note — the AlarmClockInfo show-intent for the status-bar icon. */
     private fun showPending(ctx: Context, noteId: Long) = PendingIntent.getActivity(
         ctx, code(noteId, 6),
@@ -209,7 +230,10 @@ class AlarmReceiver : BroadcastReceiver() {
         // foreground-service-start exemption.)
         if (intent.action == Notifier.ACTION_FIRE) {
             ContextCompat.startForegroundService(
-                ctx, Intent(ctx, ReminderService::class.java).putExtra("note", noteId),
+                ctx,
+                Intent(ctx, ReminderService::class.java)
+                    .putExtra("note", noteId)
+                    .putExtra("snooze", intent.getBooleanExtra("snooze", false)),
             )
             return
         }
@@ -220,8 +244,17 @@ class AlarmReceiver : BroadcastReceiver() {
         val nm = ctx.getSystemService(NotificationManager::class.java)
         when (intent.action) {
             Notifier.ACTION_SNOOZE -> {
-                note.reminderAt = Notifier.snoozeTime(intent.getStringExtra("kind"))
-                note.reminderFired = false
+                val snoozeAt = Notifier.snoozeTime(intent.getStringExtra("kind"))
+                if (note.reminderRepeat != "NONE") {
+                    // Keep the repeat schedule — reminderAt already points at the
+                    // next occurrence. Arm a temporary one-time alarm instead,
+                    // unless it would land at/after that next repeat (pointless).
+                    note.reminderSnoozeAt = if (snoozeAt >= note.reminderAt) 0L else snoozeAt
+                } else {
+                    // One-time reminder: snooze just moves its single fire time.
+                    note.reminderAt = snoozeAt
+                    note.reminderFired = false
+                }
                 Db.save(note)
                 Notifier.schedule(ctx, note)
                 nm.cancel(note.id.toInt())
@@ -230,6 +263,7 @@ class AlarmReceiver : BroadcastReceiver() {
                 note.reminderAt = 0
                 note.reminderRepeat = "NONE"
                 note.reminderFired = false
+                note.reminderSnoozeAt = 0
                 Db.save(note)
                 Notifier.cancel(ctx, note.id)                  // drop alarm + notification
             }
@@ -267,11 +301,16 @@ class ReminderService : Service() {
         }
 
         val noteId = intent?.getLongExtra("note", 0L) ?: 0L
+        val snooze = intent?.getBooleanExtra("snooze", false) ?: false
         if (noteId > 0L && !recentlyFired(noteId)) {
             Db.init(this)
             Db.note(noteId)?.let { note ->
                 Notifier.fire(this, note)
-                if (note.reminderRepeat != "NONE") {           // re-arm the next cycle
+                if (snooze) {                                  // temporary snooze fired
+                    note.reminderSnoozeAt = 0                  // consume it; repeat untouched
+                    Db.save(note)
+                    Notifier.schedule(this, note)
+                } else if (note.reminderRepeat != "NONE") {    // re-arm the next cycle
                     note.reminderAt = Notifier.next(note.reminderAt, note.reminderRepeat)
                     Db.save(note)
                     Notifier.schedule(this, note)

@@ -40,6 +40,7 @@ data class Note(
     var reminderAt: Long = 0,           // epoch ms; 0 = no reminder
     var reminderRepeat: String = "NONE",// NONE | DAILY | WEEKLY | MONTHLY | YEARLY
     var reminderFired: Boolean = false, // a one-time reminder that already went off
+    var reminderSnoozeAt: Long = 0,     // epoch ms; a temporary one-time snooze, 0 = none
     var position: Int = 0,              // manual sort order; lower = higher on screen
     var items: MutableList<Item> = mutableListOf(),
     var labelIds: MutableSet<Long> = mutableSetOf(),
@@ -60,14 +61,15 @@ object Db {
     fun init(context: Context) {
         if (::helper.isInitialized) return
         ctx = context.applicationContext
-        helper = object : SQLiteOpenHelper(ctx, NAME, null, 4) {
+        helper = object : SQLiteOpenHelper(ctx, NAME, null, 5) {
             override fun onConfigure(db: SQLiteDatabase) = db.setForeignKeyConstraintsEnabled(true)
             override fun onCreate(db: SQLiteDatabase) {
                 db.execSQL(
                     "CREATE TABLE notes(id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, body TEXT, " +
                         "checklist INTEGER, color INTEGER, pinned INTEGER, archived INTEGER, " +
                         "created INTEGER, modified INTEGER, reminder_at INTEGER, reminder_repeat TEXT, " +
-                        "reminder_fired INTEGER DEFAULT 0, position INTEGER DEFAULT 0)"
+                        "reminder_fired INTEGER DEFAULT 0, position INTEGER DEFAULT 0, " +
+                        "reminder_snooze_at INTEGER DEFAULT 0)"
                 )
                 db.execSQL(
                     "CREATE TABLE items(id INTEGER PRIMARY KEY AUTOINCREMENT, note_id INTEGER, " +
@@ -87,6 +89,7 @@ object Db {
                 if (oldV < 2) db.execSQL("ALTER TABLE notes ADD COLUMN reminder_fired INTEGER DEFAULT 0")
                 if (oldV < 3) db.execSQL("ALTER TABLE notes ADD COLUMN position INTEGER DEFAULT 0")
                 if (oldV < 4) createLinks(db)
+                if (oldV < 5) db.execSQL("ALTER TABLE notes ADD COLUMN reminder_snooze_at INTEGER DEFAULT 0")
             }
             private fun createLinks(db: SQLiteDatabase) {
                 db.execSQL(
@@ -162,6 +165,7 @@ object Db {
             put("created", n.created); put("modified", n.modified)
             put("reminder_at", n.reminderAt); put("reminder_repeat", n.reminderRepeat)
             put("reminder_fired", if (n.reminderFired) 1 else 0)
+            put("reminder_snooze_at", n.reminderSnoozeAt)
             put("position", n.position)
         }
         if (n.id == 0L) n.id = db.insert("notes", null, v)
@@ -309,6 +313,7 @@ object Db {
         reminderAt = c.getLong(c.getColumnIndexOrThrow("reminder_at")),
         reminderRepeat = c.getString(c.getColumnIndexOrThrow("reminder_repeat")) ?: "NONE",
         reminderFired = c.getInt(c.getColumnIndexOrThrow("reminder_fired")) == 1,
+        reminderSnoozeAt = c.getLong(c.getColumnIndexOrThrow("reminder_snooze_at")),
         position = c.getInt(c.getColumnIndexOrThrow("position")),
     )
 

@@ -27,11 +27,12 @@ file over creating a new one. Reuse Compose/Material 3 instead of hand-rolling.
 
 `MainActivity.kt` is large on purpose — that is the god object.
 
-## Data model (SQLite, 5 tables, schema v4)
+## Data model (SQLite, 5 tables, schema v5)
 
 ```
 notes(id, title, body, checklist, color, pinned, archived, created, modified,
-      reminder_at, reminder_repeat, reminder_fired, position)
+      reminder_at, reminder_repeat, reminder_fired, position,
+      reminder_snooze_at)
 items(id, note_id, text, checked, pos)        -- checklist rows, FK cascade
 labels(id, name)
 note_labels(note_id, label_id)                -- FK cascade
@@ -61,6 +62,20 @@ re-fires on reboot/app-start. Rules, all enforced in `Notifier`/`Db`:
   changes the reminder time/recurrence.
 - A *missed* one-time reminder (device off) still has `reminder_fired=0`, so
   `BootReceiver` arms it and it fires once as catch-up.
+
+Snoozing a **repeating** reminder must not shift its cadence. `reminder_at`
+always holds the next *scheduled* occurrence; a snooze is a separate temporary
+one-time alarm stored in `reminder_snooze_at` (0 = none) on its own PendingIntent
+slot (4). Rules:
+
+- `ACTION_SNOOZE` on a repeating note sets `reminder_snooze_at` (leaving
+  `reminder_at` untouched), or drops it if the snooze would land at/after the
+  next repeat. On a one-time note it still just moves `reminder_at`.
+- The snooze alarm carries a `snooze=true` extra; when it fires `ReminderService`
+  clears `reminder_snooze_at` without advancing the repeat. Its notification is
+  re-snoozable like any other.
+- `schedule()` arms/cancels the snooze alarm from `reminder_snooze_at`;
+  `BootReceiver` re-arms it. `persist()` and `ACTION_DONE` clear it.
 
 Exact alarms use `setExactAndAllowWhileIdle`. The app declares
 `USE_EXACT_ALARM` (install-granted, no prompt) and requests a Doze
