@@ -1,4 +1,8 @@
-@file:OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@file:OptIn(
+    ExperimentalMaterial3Api::class,
+    ExperimentalLayoutApi::class,
+    ExperimentalSharedTransitionApi::class,
+)
 
 package com.example.keeper
 
@@ -19,6 +23,20 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -288,24 +306,38 @@ fun App(openState: androidx.compose.runtime.MutableLongState) {
         }
     }
 
-    val current = editing
+    // Drag-to-reorder state for the note grid. onMove rearranges the in-memory
+    // list for a smooth animation; the new order is persisted on drag release.
+    // Hoisted above the open/close transition so the scroll position survives a
+    // round-trip into the editor and back.
+    val gridState = rememberLazyStaggeredGridState()
+    val reorderState = rememberReorderableLazyStaggeredGridState(gridState) { from, to ->
+        notes = notes.toMutableList().apply { add(to.index, removeAt(from.index)) }
+    }
+
+    // The tapped tile morphs into the editor (Keep-style shared-element
+    // container transform) and shrinks back on close. Grid and editor must
+    // co-exist in the composition for the morph, so they are the two states of
+    // one AnimatedContent rather than an early return. The matching
+    // sharedBounds key ("note-<id>") on the tile and the editor drives the morph;
+    // the fade here is just the backdrop.
+    SharedTransitionLayout {
+    AnimatedContent(
+        targetState = editing,
+        contentKey = { it?.id },
+        label = "editor",
+        transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(220)) },
+    ) { current ->
     if (current != null) {
         NoteEditor(
             note = current,
             labels = labels,
             onAddLabel = { name -> Db.addLabel(name); labels = Db.labels() },
             onClose = { editing = null; reload() },
+            sharedScope = this@SharedTransitionLayout,
+            animScope = this@AnimatedContent,
         )
-        return
-    }
-
-    // Drag-to-reorder state for the note grid. onMove rearranges the in-memory
-    // list for a smooth animation; the new order is persisted on drag release.
-    val gridState = rememberLazyStaggeredGridState()
-    val reorderState = rememberReorderableLazyStaggeredGridState(gridState) { from, to ->
-        notes = notes.toMutableList().apply { add(to.index, removeAt(from.index)) }
-    }
-
+    } else {
     ModalNavigationDrawer(
         drawerState = drawer,
         drawerContent = {
@@ -380,15 +412,24 @@ fun App(openState: androidx.compose.runtime.MutableLongState) {
                         }
                     },
                     title = {
-                        if (searching) {
-                            TextField(
-                                value = search, onValueChange = { search = it },
-                                placeholder = { Text("Search notes") },
-                                singleLine = true, colors = clearFieldColors(),
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                        } else {
-                            Text(filter.name)
+                        AnimatedContent(
+                            targetState = searching,
+                            label = "search",
+                            transitionSpec = {
+                                (fadeIn(tween(200)) + expandHorizontally(expandFrom = Alignment.End)) togetherWith
+                                    (fadeOut(tween(120)) + shrinkHorizontally(shrinkTowards = Alignment.End))
+                            },
+                        ) { on ->
+                            if (on) {
+                                TextField(
+                                    value = search, onValueChange = { search = it },
+                                    placeholder = { Text("Search notes") },
+                                    singleLine = true, colors = clearFieldColors(),
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            } else {
+                                Text(filter.name)
+                            }
                         }
                     },
                     actions = {
@@ -396,10 +437,12 @@ fun App(openState: androidx.compose.runtime.MutableLongState) {
                             searching = !searching
                             if (!searching) search = ""
                         }) {
-                            Icon(
-                                if (searching) Icons.Default.Close else Icons.Default.Search,
-                                "Search",
-                            )
+                            AnimatedContent(searching, label = "searchIcon") { on ->
+                                Icon(
+                                    if (on) Icons.Default.Close else Icons.Default.Search,
+                                    "Search",
+                                )
+                            }
                         }
                     },
                 )
@@ -436,6 +479,8 @@ fun App(openState: androidx.compose.runtime.MutableLongState) {
                                 Modifier.longPressDraggableHandle(
                                     onDragStopped = { Db.reorder(notes.map { it.id }) },
                                 ),
+                                sharedScope = this@SharedTransitionLayout,
+                                animScope = this@AnimatedContent,
                             ) { editing = note }
                         }
                     }
@@ -443,6 +488,9 @@ fun App(openState: androidx.compose.runtime.MutableLongState) {
             }
         }
     }
+    } // else (grid screen)
+    } // AnimatedContent
+    } // SharedTransitionLayout
 
     if (showLabelManager) {
         LabelManagerDialog(
@@ -460,10 +508,28 @@ fun App(openState: androidx.compose.runtime.MutableLongState) {
 /* ---- note grid tile ---- */
 
 @Composable
-fun NoteTile(note: Note, allLabels: List<Label>, modifier: Modifier, onClick: () -> Unit) {
+fun NoteTile(
+    note: Note,
+    allLabels: List<Label>,
+    modifier: Modifier,
+    sharedScope: SharedTransitionScope,
+    animScope: AnimatedVisibilityScope,
+    onClick: () -> Unit,
+) {
     val (bg, fg) = noteColors(note.color)
+    // The matching key on the editor's Scaffold makes the tile expand into the
+    // editor (and shrink back) — the Keep-style container transform.
+    val cardModifier = with(sharedScope) {
+        modifier
+            .sharedBounds(
+                rememberSharedContentState(key = "note-${note.id}"),
+                animatedVisibilityScope = animScope,
+                resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
+            )
+            .fillMaxWidth()
+    }
     Card(
-        modifier = modifier.fillMaxWidth(),
+        modifier = cardModifier,
         onClick = onClick,
         colors = CardDefaults.cardColors(containerColor = bg, contentColor = fg),
         border = if (note.color == 0) androidx.compose.foundation.BorderStroke(
@@ -668,6 +734,8 @@ fun NoteEditor(
     labels: List<Label>,
     onAddLabel: (String) -> Unit,
     onClose: () -> Unit,
+    sharedScope: SharedTransitionScope,
+    animScope: AnimatedVisibilityScope,
 ) {
     val ctx = LocalContext.current
     var title by remember { mutableStateOf(note.title) }
@@ -735,7 +803,19 @@ fun NoteEditor(
     }
 
     val (bg, fg) = noteColors(color)
+    // Same key as the source tile: the editor grows out of / collapses back
+    // into the tile that opened it. A blank note from the FAB has id 0, which
+    // matches no tile, so it simply fades in via the AnimatedContent backdrop.
+    val scaffoldModifier = with(sharedScope) {
+        Modifier.sharedBounds(
+            rememberSharedContentState(key = "note-${note.id}"),
+            animatedVisibilityScope = animScope,
+            resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
+            clipInOverlayDuringTransition = OverlayClip(RoundedCornerShape(12.dp)),
+        )
+    }
     Scaffold(
+        modifier = scaffoldModifier,
         containerColor = bg,
         contentColor = fg,
         topBar = {
@@ -812,7 +892,11 @@ fun NoteEditor(
                     .background(bg)
                     .windowInsetsPadding(WindowInsets.navigationBars),
             ) {
-                if (showColors) ColorBar(color) { color = it }
+                AnimatedVisibility(
+                    visible = showColors,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut(),
+                ) { ColorBar(color) { color = it } }
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
