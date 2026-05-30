@@ -3,10 +3,12 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Rounded-shoulder shield (variant 02), centered at x=54 and kept inside
-         the 66dp safe zone so it survives any launcher mask. Drawn as a solid
-         white silhouette so the same path doubles as the monochrome layer. -->
+    <!-- Rounded-shoulder shield (variant 02), centered at (54,54). Sized so the
+         shield's farthest point from center (its rounded top corners) sits at
+         R/phi, where R=36 is the round-icon viewport radius and phi=1.618 is the
+         golden ratio: 36/1.618 = 22.25. Drawn as a solid white silhouette so the
+         same path doubles as the monochrome layer. -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M38.5,30 H69.5 A4.5,4.5 0 0 1 74,34.5 V52 C74,67 65.4,76 54,81 C42.6,76 34,67 34,52 V34.5 A4.5,4.5 0 0 1 38.5,30 Z" />
+        android:pathData="M42.274,35.843 H65.726 A3.404,3.404 0 0 1 69.131,39.247 V52.487 C69.131,63.835 62.625,70.644 54,74.427 C45.375,70.644 38.869,63.835 38.869,52.487 V39.247 A3.404,3.404 0 0 1 42.274,35.843 Z" />
 </vector>
