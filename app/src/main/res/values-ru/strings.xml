@@ -1,0 +1,116 @@
+<resources>
+    <!-- app_name intentionally not translated (brand name) -->
+
+    <!-- Drawer / filters -->
+    <string name="notes">Заметки</string>
+    <string name="reminders">Напоминания</string>
+    <string name="archive">Архив</string>
+    <string name="edit_labels">Изменить ярлыки</string>
+    <string name="export_db">Экспорт базы данных</string>
+    <string name="import_db">Импорт базы данных</string>
+    <string name="reminder_reliability">Надёжность напоминаний</string>
+
+    <!-- Top bar / grid -->
+    <string name="menu">Меню</string>
+    <string name="search">Поиск</string>
+    <string name="search_notes">Поиск заметок</string>
+    <string name="new_note">Новая заметка</string>
+    <string name="no_matching_notes">Ничего не найдено</string>
+    <string name="nothing_here_yet">Здесь пока пусто</string>
+    <string name="pinned">Закреплено</string>
+    <string name="more_items">Ещё %d</string>
+
+    <!-- Editor -->
+    <string name="back">Назад</string>
+    <string name="pin">Закрепить</string>
+    <string name="more">Ещё</string>
+    <string name="open">Открыть</string>
+    <string name="color">Цвет</string>
+    <string name="switch_to_text">Сделать текстом</string>
+    <string name="switch_to_checklist">Сделать списком</string>
+    <string name="labels">Ярлыки</string>
+    <string name="unarchive">Из архива</string>
+    <string name="delete">Удалить</string>
+    <string name="title_hint">Заголовок</string>
+    <string name="list_item_hint">Пункт списка</string>
+    <string name="note_hint">Заметка</string>
+    <string name="add_item">Добавить пункт</string>
+    <string name="remove_item">Удалить пункт</string>
+
+    <!-- Reminder dialog -->
+    <string name="reminder">Напоминание</string>
+    <string name="date">Дата</string>
+    <string name="today">Сегодня</string>
+    <string name="tomorrow">Завтра</string>
+    <string name="next_weekday">Через неделю (%s)</string>
+    <string name="pick_date">Выбрать дату…</string>
+    <string name="time">Время</string>
+    <string name="morning_preset">Утро · 08:00</string>
+    <string name="afternoon_preset">День · 13:00</string>
+    <string name="evening_preset">Вечер · 18:00</string>
+    <string name="pick_time">Выбрать время…</string>
+    <string name="repeat">Повтор</string>
+    <string name="custom_interval_ellipsis">Свой интервал…</string>
+    <string name="save">Сохранить</string>
+    <string name="remove">Убрать</string>
+    <string name="cancel">Отмена</string>
+
+    <!-- Repeat labels -->
+    <string name="does_not_repeat">Без повтора</string>
+    <string name="daily">Ежедневно</string>
+    <string name="weekly">Еженедельно</string>
+    <string name="monthly">Ежемесячно</string>
+    <string name="yearly">Ежегодно</string>
+    <plurals name="every_days">
+        <item quantity="one">Каждый %d день</item>
+        <item quantity="few">Каждые %d дня</item>
+        <item quantity="many">Каждые %d дней</item>
+        <item quantity="other">Каждые %d дня</item>
+    </plurals>
+    <plurals name="every_weeks">
+        <item quantity="one">Каждую %d неделю</item>
+        <item quantity="few">Каждые %d недели</item>
+        <item quantity="many">Каждые %d недель</item>
+        <item quantity="other">Каждые %d недели</item>
+    </plurals>
+    <plurals name="every_months">
+        <item quantity="one">Каждый %d месяц</item>
+        <item quantity="few">Каждые %d месяца</item>
+        <item quantity="many">Каждые %d месяцев</item>
+        <item quantity="other">Каждые %d месяца</item>
+    </plurals>
+    <plurals name="every_years">
+        <item quantity="one">Каждый %d год</item>
+        <item quantity="few">Каждые %d года</item>
+        <item quantity="many">Каждые %d лет</item>
+        <item quantity="other">Каждые %d года</item>
+    </plurals>
+
+    <!-- Custom interval dialog -->
+    <string name="custom_interval">Свой интервал</string>
+    <string name="repeat_every">Повторять каждые</string>
+    <string name="unit">Единица</string>
+    <string name="unit_days">дни</string>
+    <string name="unit_weeks">недели</string>
+    <string name="unit_months">месяцы</string>
+    <string name="unit_years">годы</string>
+
+    <!-- Label dialogs -->
+    <string name="new_label">Новый ярлык</string>
+    <string name="add_label">Добавить ярлык</string>
+    <string name="delete_label">Удалить ярлык</string>
+    <string name="done">Готово</string>
+
+    <!-- Reminder reliability dialog -->
+    <string name="reliability_intro">Напоминания используют точные будильники. Некоторые телефоны — особенно Xiaomi/MIUI — всё равно замораживают приложение и задерживают или отменяют их. Выдайте эти разрешения, чтобы напоминания срабатывали вовремя:</string>
+    <string name="reliability_battery">Батарея: выбрать «Без ограничений»</string>
+    <string name="reliability_autostart">Разрешить автозапуск (MIUI)</string>
+    <string name="reliability_notifications">Настройки уведомлений</string>
+    <string name="reliability_exact">Разрешить точные будильники</string>
+    <string name="reliability_outro">Также в списке недавних приложений закрепите Keeper (значок замка), чтобы система не выгружала его, и не смахивайте его.</string>
+
+    <!-- Notifications -->
+    <string name="channel_delivery">Доставка напоминаний</string>
+    <string name="delivering_reminder">Доставка напоминания…</string>
+    <string name="snooze_1_hour">1 час</string>
+</resources>

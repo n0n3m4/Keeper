@@ -17,3 +17,6 @@ local.properties
 # Icon design scratch (not part of the app build)
 /logo-variants
 /Google_Keep_2020_Logo.svg
+
+# Claude Code local settings
+/.claude/

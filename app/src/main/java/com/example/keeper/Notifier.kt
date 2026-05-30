@@ -42,7 +42,10 @@ object Notifier {
     private fun ensureChannel(ctx: Context) {
         if (nm(ctx).getNotificationChannel(CHANNEL) == null) {
             nm(ctx).createNotificationChannel(
-                NotificationChannel(CHANNEL, "Reminders", NotificationManager.IMPORTANCE_HIGH)
+                NotificationChannel(
+                    CHANNEL, ctx.getString(R.string.reminders),
+                    NotificationManager.IMPORTANCE_HIGH,
+                )
             )
         }
     }
@@ -54,7 +57,8 @@ object Notifier {
         if (nm(ctx).getNotificationChannel(BG_CHANNEL) == null) {
             nm(ctx).createNotificationChannel(
                 NotificationChannel(
-                    BG_CHANNEL, "Reminder delivery", NotificationManager.IMPORTANCE_LOW,
+                    BG_CHANNEL, ctx.getString(R.string.channel_delivery),
+                    NotificationManager.IMPORTANCE_LOW,
                 )
             )
         }
@@ -65,7 +69,7 @@ object Notifier {
         ensureBgChannel(ctx)
         return Notification.Builder(ctx, BG_CHANNEL)
             .setSmallIcon(R.drawable.ic_reminder)
-            .setContentTitle("Delivering reminder…")
+            .setContentTitle(ctx.getString(R.string.delivering_reminder))
             .build()
     }
 
@@ -158,14 +162,14 @@ object Notifier {
 
         val n = Notification.Builder(ctx, CHANNEL)
             .setSmallIcon(R.drawable.ic_reminder)
-            .setContentTitle(note.title.ifBlank { "Reminder" })
+            .setContentTitle(note.title.ifBlank { ctx.getString(R.string.reminder) })
             .setContentText(text)
             .setStyle(Notification.BigTextStyle().bigText(text))
             .setContentIntent(open)
             .setAutoCancel(true)
-            .addAction(0, "1 hour", actionPending(ctx, note.id, 1, ACTION_SNOOZE, "LATER"))
-            .addAction(0, "Tomorrow", actionPending(ctx, note.id, 2, ACTION_SNOOZE, "TOMORROW"))
-            .addAction(0, "Done", actionPending(ctx, note.id, 3, ACTION_DONE, null))
+            .addAction(0, ctx.getString(R.string.snooze_1_hour), actionPending(ctx, note.id, 1, ACTION_SNOOZE, "LATER"))
+            .addAction(0, ctx.getString(R.string.tomorrow), actionPending(ctx, note.id, 2, ACTION_SNOOZE, "TOMORROW"))
+            .addAction(0, ctx.getString(R.string.done), actionPending(ctx, note.id, 3, ACTION_DONE, null))
             .build()
         nm(ctx).notify(note.id.toInt(), n)
     }

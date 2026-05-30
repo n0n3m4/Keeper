@@ -131,6 +131,8 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
@@ -160,28 +162,32 @@ val NoteColors = listOf(
     0xFFD4E4EDL, 0xFFAECCDCL, 0xFFD3BFDBL, 0xFFF6E2DDL, 0xFFE9E3D4L, 0xFFEFEFF1L,
 )
 
-// Fixed recurrence rows for the Repeat dropdown. Custom intervals use the
-// "EVERY:<n>:<unit>" code (see Notifier.repeatStep) and aren't listed here.
-val Repeats = listOf(
-    "NONE" to "Does not repeat", "DAILY" to "Daily", "WEEKLY" to "Weekly",
-    "MONTHLY" to "Monthly", "YEARLY" to "Yearly",
-)
+// Fixed recurrence codes for the Repeat dropdown, in display order. Custom
+// intervals use the "EVERY:<n>:<unit>" code (see Notifier.repeatStep) and aren't
+// listed here. Labels are resolved per-locale by repeatLabel().
+val RepeatCodes = listOf("NONE", "DAILY", "WEEKLY", "MONTHLY", "YEARLY")
 
 private fun fmt(ms: Long) = SimpleDateFormat("MMM d, HH:mm", Locale.getDefault()).format(Date(ms))
 
-/** Human label for any repeat code, including custom "EVERY:<n>:<unit>". */
-fun repeatLabel(code: String): String = when {
-    code == "DAILY" -> "Daily"
-    code == "WEEKLY" -> "Weekly"
-    code == "MONTHLY" -> "Monthly"
-    code == "YEARLY" -> "Yearly"
+/** Human label for any repeat code, including custom "EVERY:<n>:<unit>".
+ *  Localised, so it takes a Context for string/plural lookup. */
+fun repeatLabel(ctx: Context, code: String): String = when {
+    code == "DAILY" -> ctx.getString(R.string.daily)
+    code == "WEEKLY" -> ctx.getString(R.string.weekly)
+    code == "MONTHLY" -> ctx.getString(R.string.monthly)
+    code == "YEARLY" -> ctx.getString(R.string.yearly)
     code.startsWith("EVERY:") -> runCatching {
         val (_, n, unit) = code.split(":")
-        val u = when (unit) { "DAY" -> "day"; "WEEK" -> "week"; "MONTH" -> "month"
-                              else -> "year" }
-        "Every $n $u" + if (n.toInt() != 1) "s" else ""
-    }.getOrDefault("Does not repeat")
-    else -> "Does not repeat"   // NONE
+        val count = n.toInt()
+        val plural = when (unit) {
+            "DAY" -> R.plurals.every_days
+            "WEEK" -> R.plurals.every_weeks
+            "MONTH" -> R.plurals.every_months
+            else -> R.plurals.every_years
+        }
+        ctx.resources.getQuantityString(plural, count, count)
+    }.getOrDefault(ctx.getString(R.string.does_not_repeat))
+    else -> ctx.getString(R.string.does_not_repeat)   // NONE
 }
 
 /** A reminder is "spent" — and shown dimmed — once a one-time reminder has
@@ -189,13 +195,26 @@ fun repeatLabel(code: String): String = when {
 fun reminderInactive(at: Long, repeat: String, fired: Boolean): Boolean =
     repeat == "NONE" && (fired || at <= System.currentTimeMillis())
 
-/** Which drawer view is showing. One object drives the whole note query. */
+/** Which drawer view is showing. One object drives the whole note query.
+ *  [name] is a stable internal key for the three built-ins ("Notes" /
+ *  "Reminders" / "Archive") and the label's own name for a label view; the
+ *  shown title is localised by [filterTitle]. */
 data class Filter(
     val name: String,
     val archived: Boolean = false,
     val reminders: Boolean = false,
     val labelId: Long? = null,
 )
+
+/** Localised app-bar title for a filter. Built-ins map to their translation;
+ *  a label view shows the (user-entered) label name as-is. */
+@Composable
+fun filterTitle(f: Filter): String = when (f.name) {
+    "Notes" -> stringResource(R.string.notes)
+    "Reminders" -> stringResource(R.string.reminders)
+    "Archive" -> stringResource(R.string.archive)
+    else -> f.name
+}
 
 /*
  * MainActivity hosts the entire app. There is no ViewModel and no navigation
@@ -343,7 +362,7 @@ fun App(openState: androidx.compose.runtime.MutableLongState) {
         drawerContent = {
             ModalDrawerSheet {
                 Text(
-                    "Keeper",
+                    stringResource(R.string.app_name),
                     style = MaterialTheme.typography.headlineSmall,
                     modifier = Modifier.padding(24.dp),
                 )
@@ -352,19 +371,19 @@ fun App(openState: androidx.compose.runtime.MutableLongState) {
                     scope.launch { drawer.close() }
                 }
                 NavigationDrawerItem(
-                    label = { Text("Notes") }, selected = filter.name == "Notes",
+                    label = { Text(stringResource(R.string.notes)) }, selected = filter.name == "Notes",
                     icon = { Icon(Icons.AutoMirrored.Filled.List, null) },
                     onClick = { go(Filter("Notes")) },
                     modifier = Modifier.padding(horizontal = 12.dp),
                 )
                 NavigationDrawerItem(
-                    label = { Text("Reminders") }, selected = filter.name == "Reminders",
+                    label = { Text(stringResource(R.string.reminders)) }, selected = filter.name == "Reminders",
                     icon = { Icon(Icons.Default.Notifications, null) },
                     onClick = { go(Filter("Reminders", reminders = true)) },
                     modifier = Modifier.padding(horizontal = 12.dp),
                 )
                 NavigationDrawerItem(
-                    label = { Text("Archive") }, selected = filter.name == "Archive",
+                    label = { Text(stringResource(R.string.archive)) }, selected = filter.name == "Archive",
                     onClick = { go(Filter("Archive", archived = true)) },
                     modifier = Modifier.padding(horizontal = 12.dp),
                 )
@@ -378,24 +397,24 @@ fun App(openState: androidx.compose.runtime.MutableLongState) {
                     )
                 }
                 NavigationDrawerItem(
-                    label = { Text("Edit labels") }, selected = false,
+                    label = { Text(stringResource(R.string.edit_labels)) }, selected = false,
                     onClick = { showLabelManager = true; scope.launch { drawer.close() } },
                     modifier = Modifier.padding(horizontal = 12.dp),
                 )
                 HorizontalDivider(Modifier.padding(12.dp))
                 NavigationDrawerItem(
-                    label = { Text("Export database") }, selected = false,
+                    label = { Text(stringResource(R.string.export_db)) }, selected = false,
                     onClick = { exporter.launch("keeper-backup.db"); scope.launch { drawer.close() } },
                     modifier = Modifier.padding(horizontal = 12.dp),
                 )
                 NavigationDrawerItem(
-                    label = { Text("Import database") }, selected = false,
+                    label = { Text(stringResource(R.string.import_db)) }, selected = false,
                     onClick = { importer.launch(arrayOf("*/*")); scope.launch { drawer.close() } },
                     modifier = Modifier.padding(horizontal = 12.dp),
                 )
                 HorizontalDivider(Modifier.padding(12.dp))
                 NavigationDrawerItem(
-                    label = { Text("Reminder reliability") }, selected = false,
+                    label = { Text(stringResource(R.string.reminder_reliability)) }, selected = false,
                     icon = { Icon(Icons.Default.Notifications, null) },
                     onClick = { showReliabilityHelp = true; scope.launch { drawer.close() } },
                     modifier = Modifier.padding(horizontal = 12.dp),
@@ -408,7 +427,7 @@ fun App(openState: androidx.compose.runtime.MutableLongState) {
                 TopAppBar(
                     navigationIcon = {
                         IconButton(onClick = { scope.launch { drawer.open() } }) {
-                            Icon(Icons.Default.Menu, "Menu")
+                            Icon(Icons.Default.Menu, stringResource(R.string.menu))
                         }
                     },
                     title = {
@@ -423,12 +442,12 @@ fun App(openState: androidx.compose.runtime.MutableLongState) {
                             if (on) {
                                 TextField(
                                     value = search, onValueChange = { search = it },
-                                    placeholder = { Text("Search notes") },
+                                    placeholder = { Text(stringResource(R.string.search_notes)) },
                                     singleLine = true, colors = clearFieldColors(),
                                     modifier = Modifier.fillMaxWidth(),
                                 )
                             } else {
-                                Text(filter.name)
+                                Text(filterTitle(filter))
                             }
                         }
                     },
@@ -440,7 +459,7 @@ fun App(openState: androidx.compose.runtime.MutableLongState) {
                             AnimatedContent(searching, label = "searchIcon") { on ->
                                 Icon(
                                     if (on) Icons.Default.Close else Icons.Default.Search,
-                                    "Search",
+                                    stringResource(R.string.search),
                                 )
                             }
                         }
@@ -451,7 +470,7 @@ fun App(openState: androidx.compose.runtime.MutableLongState) {
                 // No "create" button in Archive — a new note is never archived.
                 if (!filter.archived) {
                     FloatingActionButton(onClick = { editing = Note() }) {
-                        Icon(Icons.Default.Add, "New note")
+                        Icon(Icons.Default.Add, stringResource(R.string.new_note))
                     }
                 }
             },
@@ -459,7 +478,8 @@ fun App(openState: androidx.compose.runtime.MutableLongState) {
             if (notes.isEmpty()) {
                 Box(Modifier.fillMaxSize().padding(pad), Alignment.Center) {
                     Text(
-                        if (search.isNotBlank()) "No matching notes" else "Nothing here yet",
+                        if (search.isNotBlank()) stringResource(R.string.no_matching_notes)
+                        else stringResource(R.string.nothing_here_yet),
                         color = MaterialTheme.colorScheme.outline,
                     )
                 }
@@ -547,7 +567,7 @@ fun NoteTile(
                 } else {
                     Spacer(Modifier.weight(1f))
                 }
-                if (note.pinned) Icon(Icons.Default.Star, "Pinned", Modifier.size(18.dp))
+                if (note.pinned) Icon(Icons.Default.Star, stringResource(R.string.pinned), Modifier.size(18.dp))
             }
             if (note.checklist) {
                 note.items.take(8).forEach { item ->
@@ -558,7 +578,10 @@ fun NoteTile(
                     )
                 }
                 if (note.items.size > 8)
-                    Text("+${note.items.size - 8} more", style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        stringResource(R.string.more_items, note.items.size - 8),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
             } else if (note.body.isNotBlank()) {
                 Text(
                     linkified(note.body, clickable = true),
@@ -619,13 +642,14 @@ private fun ReminderChip(
     dimmed: Boolean,
     onClick: (() -> Unit)? = null,
 ) {
+    val ctx = LocalContext.current
     val content =
         if (dimmed) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
         else MaterialTheme.colorScheme.onSurface
     val bg =
         if (dimmed) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)
         else Color.Black.copy(alpha = 0.08f)
-    val label = fmt(at) + if (repeat == "NONE") "" else " · ${repeatLabel(repeat)}"
+    val label = fmt(at) + if (repeat == "NONE") "" else " · ${repeatLabel(ctx, repeat)}"
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -826,26 +850,26 @@ fun NoteEditor(
                 ),
                 navigationIcon = {
                     IconButton(onClick = { saveAndClose() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back))
                     }
                 },
                 title = {},
                 actions = {
                     IconButton(onClick = { pinned = !pinned }) {
                         Icon(
-                            Icons.Default.Star, "Pin",
+                            Icons.Default.Star, stringResource(R.string.pin),
                             tint = if (pinned) fg else fg.copy(alpha = 0.4f),
                         )
                     }
                     IconButton(onClick = { showReminder = true }) {
-                        Icon(Icons.Default.Notifications, "Reminder")
+                        Icon(Icons.Default.Notifications, stringResource(R.string.reminder))
                     }
                     IconButton(onClick = { menu = true }) {
-                        Icon(Icons.Default.MoreVert, "More")
+                        Icon(Icons.Default.MoreVert, stringResource(R.string.more))
                     }
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                         DropdownMenuItem(
-                            text = { Text(if (checklist) "Switch to text" else "Switch to checklist") },
+                            text = { Text(stringResource(if (checklist) R.string.switch_to_text else R.string.switch_to_checklist)) },
                             onClick = {
                                 if (checklist) {
                                     // checklist -> text: fold the items into the body
@@ -863,15 +887,15 @@ fun NoteEditor(
                             },
                         )
                         DropdownMenuItem(
-                            text = { Text("Labels") },
+                            text = { Text(stringResource(R.string.labels)) },
                             onClick = { showLabels = true; menu = false },
                         )
                         DropdownMenuItem(
-                            text = { Text(if (archived) "Unarchive" else "Archive") },
+                            text = { Text(stringResource(if (archived) R.string.unarchive else R.string.archive)) },
                             onClick = { archived = !archived; menu = false },
                         )
                         DropdownMenuItem(
-                            text = { Text("Delete") },
+                            text = { Text(stringResource(R.string.delete)) },
                             onClick = {
                                 menu = false
                                 if (note.id != 0L) { Db.delete(note.id); Notifier.cancel(ctx, note.id) }
@@ -903,7 +927,7 @@ fun NoteEditor(
                 ) {
                     IconButton(onClick = { showColors = !showColors }) {
                         Icon(
-                            PaletteIcon, "Color",
+                            PaletteIcon, stringResource(R.string.color),
                             tint = if (showColors) fg else fg.copy(alpha = 0.7f),
                         )
                     }
@@ -920,7 +944,7 @@ fun NoteEditor(
         ) {
             TextField(
                 value = title, onValueChange = { title = it },
-                placeholder = { Text("Title") },
+                placeholder = { Text(stringResource(R.string.title_hint)) },
                 colors = clearFieldColors(), modifier = Modifier.fillMaxWidth(),
                 textStyle = MaterialTheme.typography.titleLarge,
             )
@@ -934,12 +958,12 @@ fun NoteEditor(
                         TextField(
                             value = item.text,
                             onValueChange = { items[i] = item.copy(text = it) },
-                            placeholder = { Text("List item") },
+                            placeholder = { Text(stringResource(R.string.list_item_hint)) },
                             colors = clearFieldColors(), singleLine = true,
                             modifier = Modifier.weight(1f),
                         )
                         IconButton(onClick = { items.removeAt(i) }) {
-                            Icon(Icons.Default.Close, "Remove item")
+                            Icon(Icons.Default.Close, stringResource(R.string.remove_item))
                         }
                     }
                 }
@@ -949,12 +973,12 @@ fun NoteEditor(
                 ) {
                     Icon(Icons.Default.Add, null)
                     Spacer(Modifier.width(4.dp))
-                    Text("Add item")
+                    Text(stringResource(R.string.add_item))
                 }
             } else {
                 TextField(
                     value = body, onValueChange = { body = it },
-                    placeholder = { Text("Note") },
+                    placeholder = { Text(stringResource(R.string.note_hint)) },
                     colors = clearFieldColors(),
                     visualTransformation = LinkUnderline,
                     modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp),
@@ -1083,66 +1107,66 @@ fun ReminderDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Reminder") },
+        title = { Text(stringResource(R.string.reminder)) },
         text = {
             // Date / time / repeat are dropdowns of common presets, each with a
             // custom escape hatch — the everyday case is one or two taps.
             Column {
-                DropdownField("Date", dateFmt.format(Date(time))) { close ->
+                DropdownField(stringResource(R.string.date), dateFmt.format(Date(time))) { close ->
                     DropdownMenuItem(
-                        text = { Text("Today") },
+                        text = { Text(stringResource(R.string.today)) },
                         onClick = { time = withDate(time, 0); close() },
                     )
                     DropdownMenuItem(
-                        text = { Text("Tomorrow") },
+                        text = { Text(stringResource(R.string.tomorrow)) },
                         onClick = { time = withDate(time, 1); close() },
                     )
                     DropdownMenuItem(
-                        text = { Text("Next $weekday") },
+                        text = { Text(stringResource(R.string.next_weekday, weekday)) },
                         onClick = { time = withDate(time, 7); close() },
                     )
                     DropdownMenuItem(
-                        text = { Text("Pick a date…") },
+                        text = { Text(stringResource(R.string.pick_date)) },
                         onClick = { close(); pickDate(ctx, time) { time = it } },
                     )
                 }
-                DropdownField("Time", timeFmt.format(Date(time))) { close ->
+                DropdownField(stringResource(R.string.time), timeFmt.format(Date(time))) { close ->
                     DropdownMenuItem(
-                        text = { Text("Morning · 08:00") },
+                        text = { Text(stringResource(R.string.morning_preset)) },
                         onClick = { time = withTime(time, 8, 0); close() },
                     )
                     DropdownMenuItem(
-                        text = { Text("Afternoon · 13:00") },
+                        text = { Text(stringResource(R.string.afternoon_preset)) },
                         onClick = { time = withTime(time, 13, 0); close() },
                     )
                     DropdownMenuItem(
-                        text = { Text("Evening · 18:00") },
+                        text = { Text(stringResource(R.string.evening_preset)) },
                         onClick = { time = withTime(time, 18, 0); close() },
                     )
                     DropdownMenuItem(
-                        text = { Text("Pick a time…") },
+                        text = { Text(stringResource(R.string.pick_time)) },
                         onClick = { close(); pickTime(ctx, time) { time = it } },
                     )
                 }
-                DropdownField("Repeat", repeatLabel(rep)) { close ->
-                    Repeats.forEach { (code, label) ->
+                DropdownField(stringResource(R.string.repeat), repeatLabel(ctx, rep)) { close ->
+                    RepeatCodes.forEach { code ->
                         DropdownMenuItem(
-                            text = { Text(label) },
+                            text = { Text(repeatLabel(ctx, code)) },
                             onClick = { rep = code; close() },
                         )
                     }
                     DropdownMenuItem(
-                        text = { Text("Custom interval…") },
+                        text = { Text(stringResource(R.string.custom_interval_ellipsis)) },
                         onClick = { close(); showCustom = true },
                     )
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { onSet(time, rep) }) { Text("Save") } },
+        confirmButton = { TextButton(onClick = { onSet(time, rep) }) { Text(stringResource(R.string.save)) } },
         dismissButton = {
             Row {
-                if (at > 0L) TextButton(onClick = onRemove) { Text("Remove") }
-                TextButton(onClick = onDismiss) { Text("Cancel") }
+                if (at > 0L) TextButton(onClick = onRemove) { Text(stringResource(R.string.remove)) }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
             }
         },
     )
@@ -1185,7 +1209,7 @@ fun DropdownField(
                     style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.weight(1f),
                 )
-                Icon(Icons.Default.ArrowDropDown, "Open")
+                Icon(Icons.Default.ArrowDropDown, stringResource(R.string.open))
             }
             DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
                 menu { open = false }
@@ -1203,7 +1227,8 @@ fun CustomIntervalDialog(
     onDismiss: () -> Unit,
 ) {
     val units = listOf(
-        "DAY" to "days", "WEEK" to "weeks", "MONTH" to "months", "YEAR" to "years",
+        "DAY" to R.string.unit_days, "WEEK" to R.string.unit_weeks,
+        "MONTH" to R.string.unit_months, "YEAR" to R.string.unit_years,
     )
     // Re-editing an existing custom interval keeps its current value.
     val parsed = remember {
@@ -1214,10 +1239,10 @@ fun CustomIntervalDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Custom interval") },
+        title = { Text(stringResource(R.string.custom_interval)) },
         text = {
             Column {
-                Text("Repeat every", style = MaterialTheme.typography.labelMedium)
+                Text(stringResource(R.string.repeat_every), style = MaterialTheme.typography.labelMedium)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     TextField(
                         value = count,
@@ -1228,10 +1253,13 @@ fun CustomIntervalDialog(
                     )
                     Spacer(Modifier.width(12.dp))
                     Box(Modifier.weight(1f)) {
-                        DropdownField("Unit", units.first { it.first == unit }.second) { close ->
-                            units.forEach { (code, name) ->
+                        DropdownField(
+                            stringResource(R.string.unit),
+                            stringResource(units.first { it.first == unit }.second),
+                        ) { close ->
+                            units.forEach { (code, nameRes) ->
                                 DropdownMenuItem(
-                                    text = { Text(name) },
+                                    text = { Text(stringResource(nameRes)) },
                                     onClick = { unit = code; close() },
                                 )
                             }
@@ -1245,9 +1273,9 @@ fun CustomIntervalDialog(
                 // A zero/blank count would make the scheduler loop forever.
                 val n = (count.toIntOrNull() ?: 1).coerceAtLeast(1)
                 onSet("EVERY:$n:$unit")
-            }) { Text("Save") }
+            }) { Text(stringResource(R.string.save)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
     )
 }
 
@@ -1263,7 +1291,7 @@ fun LabelPickerDialog(
     var newName by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Labels") },
+        title = { Text(stringResource(R.string.labels)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 labels.forEach { label ->
@@ -1281,18 +1309,18 @@ fun LabelPickerDialog(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     TextField(
                         value = newName, onValueChange = { newName = it },
-                        placeholder = { Text("New label") },
+                        placeholder = { Text(stringResource(R.string.new_label)) },
                         singleLine = true, colors = clearFieldColors(),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                         modifier = Modifier.weight(1f),
                     )
                     IconButton(
                         onClick = { if (newName.isNotBlank()) { onAddLabel(newName.trim()); newName = "" } },
-                    ) { Icon(Icons.Default.Add, "Add label") }
+                    ) { Icon(Icons.Default.Add, stringResource(R.string.add_label)) }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.done)) } },
     )
 }
 
@@ -1308,7 +1336,7 @@ fun LabelManagerDialog(labels: List<Label>, onChanged: () -> Unit, onDismiss: ()
             rows.forEach { (id, name) -> Db.renameLabel(id, name.value) }
             onChanged(); onDismiss()
         },
-        title = { Text("Edit labels") },
+        title = { Text(stringResource(R.string.edit_labels)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 rows.forEach { (id, name) ->
@@ -1322,13 +1350,13 @@ fun LabelManagerDialog(labels: List<Label>, onChanged: () -> Unit, onDismiss: ()
                             Db.deleteLabel(id)
                             rows.removeAll { it.first == id }
                             onChanged()
-                        }) { Icon(Icons.Default.Delete, "Delete label") }
+                        }) { Icon(Icons.Default.Delete, stringResource(R.string.delete_label)) }
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     TextField(
                         value = newName, onValueChange = { newName = it },
-                        placeholder = { Text("New label") },
+                        placeholder = { Text(stringResource(R.string.new_label)) },
                         singleLine = true, colors = clearFieldColors(),
                         modifier = Modifier.weight(1f),
                     )
@@ -1339,7 +1367,7 @@ fun LabelManagerDialog(labels: List<Label>, onChanged: () -> Unit, onDismiss: ()
                             newName = ""
                             onChanged()
                         }
-                    }) { Icon(Icons.Default.Add, "Add label") }
+                    }) { Icon(Icons.Default.Add, stringResource(R.string.add_label)) }
                 }
             }
         },
@@ -1347,7 +1375,7 @@ fun LabelManagerDialog(labels: List<Label>, onChanged: () -> Unit, onDismiss: ()
             TextButton(onClick = {
                 rows.forEach { (id, name) -> Db.renameLabel(id, name.value) }
                 onChanged(); onDismiss()
-            }) { Text("Done") }
+            }) { Text(stringResource(R.string.done)) }
         },
     )
 }
@@ -1371,14 +1399,10 @@ fun ReliabilityDialog(onDismiss: () -> Unit) {
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Reminder reliability") },
+        title = { Text(stringResource(R.string.reminder_reliability)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
-                Text(
-                    "Reminders use exact alarms. Some phones — Xiaomi/MIUI " +
-                        "especially — still freeze the app and delay or drop them. " +
-                        "Grant these so reminders fire on time:",
-                )
+                Text(stringResource(R.string.reliability_intro))
                 Spacer(Modifier.height(12.dp))
                 OutlinedButton(
                     onClick = {
@@ -1390,7 +1414,7 @@ fun ReliabilityDialog(onDismiss: () -> Unit) {
                         )
                     },
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("Battery: set \"No restrictions\"") }
+                ) { Text(stringResource(R.string.reliability_battery)) }
                 OutlinedButton(
                     onClick = {
                         open(
@@ -1404,7 +1428,7 @@ fun ReliabilityDialog(onDismiss: () -> Unit) {
                         )
                     },
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("Allow Autostart (MIUI)") }
+                ) { Text(stringResource(R.string.reliability_autostart)) }
                 OutlinedButton(
                     onClick = {
                         open(
@@ -1413,7 +1437,7 @@ fun ReliabilityDialog(onDismiss: () -> Unit) {
                         )
                     },
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("Notification settings") }
+                ) { Text(stringResource(R.string.reliability_notifications)) }
                 OutlinedButton(
                     onClick = {
                         open(
@@ -1424,15 +1448,12 @@ fun ReliabilityDialog(onDismiss: () -> Unit) {
                         )
                     },
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("Allow exact alarms") }
+                ) { Text(stringResource(R.string.reliability_exact)) }
                 Spacer(Modifier.height(12.dp))
-                Text(
-                    "Also, in the recent-apps view: lock Keeper (padlock icon) so " +
-                        "the system keeps it running, and don't swipe it away.",
-                )
+                Text(stringResource(R.string.reliability_outro))
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.done)) } },
     )
 }
 

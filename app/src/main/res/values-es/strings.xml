@@ -1,0 +1,108 @@
+<resources>
+    <!-- app_name intentionally not translated (brand name) -->
+
+    <!-- Drawer / filters -->
+    <string name="notes">Notas</string>
+    <string name="reminders">Recordatorios</string>
+    <string name="archive">Archivo</string>
+    <string name="edit_labels">Editar etiquetas</string>
+    <string name="export_db">Exportar base de datos</string>
+    <string name="import_db">Importar base de datos</string>
+    <string name="reminder_reliability">Fiabilidad de recordatorios</string>
+
+    <!-- Top bar / grid -->
+    <string name="menu">Menú</string>
+    <string name="search">Buscar</string>
+    <string name="search_notes">Buscar notas</string>
+    <string name="new_note">Nueva nota</string>
+    <string name="no_matching_notes">No hay notas coincidentes</string>
+    <string name="nothing_here_yet">Aún no hay nada aquí</string>
+    <string name="pinned">Fijada</string>
+    <string name="more_items">+%d más</string>
+
+    <!-- Editor -->
+    <string name="back">Atrás</string>
+    <string name="pin">Fijar</string>
+    <string name="more">Más</string>
+    <string name="open">Abrir</string>
+    <string name="color">Color</string>
+    <string name="switch_to_text">Cambiar a texto</string>
+    <string name="switch_to_checklist">Cambiar a lista</string>
+    <string name="labels">Etiquetas</string>
+    <string name="unarchive">Desarchivar</string>
+    <string name="delete">Eliminar</string>
+    <string name="title_hint">Título</string>
+    <string name="list_item_hint">Elemento de la lista</string>
+    <string name="note_hint">Nota</string>
+    <string name="add_item">Añadir elemento</string>
+    <string name="remove_item">Quitar elemento</string>
+
+    <!-- Reminder dialog -->
+    <string name="reminder">Recordatorio</string>
+    <string name="date">Fecha</string>
+    <string name="today">Hoy</string>
+    <string name="tomorrow">Mañana</string>
+    <string name="next_weekday">Próximo %s</string>
+    <string name="pick_date">Elegir una fecha…</string>
+    <string name="time">Hora</string>
+    <string name="morning_preset">Mañana · 08:00</string>
+    <string name="afternoon_preset">Tarde · 13:00</string>
+    <string name="evening_preset">Noche · 18:00</string>
+    <string name="pick_time">Elegir una hora…</string>
+    <string name="repeat">Repetir</string>
+    <string name="custom_interval_ellipsis">Intervalo personalizado…</string>
+    <string name="save">Guardar</string>
+    <string name="remove">Quitar</string>
+    <string name="cancel">Cancelar</string>
+
+    <!-- Repeat labels -->
+    <string name="does_not_repeat">No se repite</string>
+    <string name="daily">A diario</string>
+    <string name="weekly">Cada semana</string>
+    <string name="monthly">Cada mes</string>
+    <string name="yearly">Cada año</string>
+    <plurals name="every_days">
+        <item quantity="one">Cada %d día</item>
+        <item quantity="other">Cada %d días</item>
+    </plurals>
+    <plurals name="every_weeks">
+        <item quantity="one">Cada %d semana</item>
+        <item quantity="other">Cada %d semanas</item>
+    </plurals>
+    <plurals name="every_months">
+        <item quantity="one">Cada %d mes</item>
+        <item quantity="other">Cada %d meses</item>
+    </plurals>
+    <plurals name="every_years">
+        <item quantity="one">Cada %d año</item>
+        <item quantity="other">Cada %d años</item>
+    </plurals>
+
+    <!-- Custom interval dialog -->
+    <string name="custom_interval">Intervalo personalizado</string>
+    <string name="repeat_every">Repetir cada</string>
+    <string name="unit">Unidad</string>
+    <string name="unit_days">días</string>
+    <string name="unit_weeks">semanas</string>
+    <string name="unit_months">meses</string>
+    <string name="unit_years">años</string>
+
+    <!-- Label dialogs -->
+    <string name="new_label">Nueva etiqueta</string>
+    <string name="add_label">Añadir etiqueta</string>
+    <string name="delete_label">Eliminar etiqueta</string>
+    <string name="done">Hecho</string>
+
+    <!-- Reminder reliability dialog -->
+    <string name="reliability_intro">Los recordatorios usan alarmas exactas. Algunos teléfonos —Xiaomi/MIUI sobre todo— aún congelan la app y los retrasan o descartan. Concede estos permisos para que los recordatorios suenen a tiempo:</string>
+    <string name="reliability_battery">Batería: ajustar a \"Sin restricciones\"</string>
+    <string name="reliability_autostart">Permitir inicio automático (MIUI)</string>
+    <string name="reliability_notifications">Ajustes de notificaciones</string>
+    <string name="reliability_exact">Permitir alarmas exactas</string>
+    <string name="reliability_outro">Además, en la vista de apps recientes: bloquea Keeper (icono del candado) para que el sistema lo mantenga en ejecución, y no lo deslices para cerrarlo.</string>
+
+    <!-- Notifications -->
+    <string name="channel_delivery">Entrega de recordatorios</string>
+    <string name="delivering_reminder">Entregando recordatorio…</string>
+    <string name="snooze_1_hour">1 hora</string>
+</resources>

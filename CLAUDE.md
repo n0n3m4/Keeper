@@ -22,10 +22,26 @@ file over creating a new one. Reuse Compose/Material 3 instead of hand-rolling.
 | `.../Notifier.kt` | `object Notifier` + `AlarmReceiver` + `BootReceiver`. Exact-alarm scheduling, repeat math, notification building. |
 | `.../LinkPreviews.kt` | `object LinkPreviews`. Link-preview fetching: URL parsing, debounced `HttpURLConnection` fetch of page title + favicon, link-row reconciliation. |
 | `.../MainActivity.kt` | All Compose UI: note grid, editor, reminder/label dialogs, drawer. State = one `editing: Note?` flips grid↔editor; DB is re-read after every change. |
-| `.../theme/` | Stock Compose Material 3 theme from the template. |
+| `.../theme/` | Compose Material 3 theme. `Type.kt` holds the Keep-matched type scale; `Color.kt`/`Theme.kt` the fixed light palette. |
 | `app/src/main/AndroidManifest.xml` | Permissions + receiver registration. |
+| `app/src/main/res/values*/strings.xml` | All user-facing text. `values/` is English (the source); `values-es/` Spanish, `values-ru/` Russian. |
 
 `MainActivity.kt` is large on purpose — that is the god object.
+
+## Localization
+
+The app ships English, Spanish, and Russian. **Never hardcode a user-facing
+string** (UI text, content descriptions, notification text, channel names) —
+add it to `res/values/strings.xml` and translate it in `values-es/` and
+`values-ru/`. In Compose use `stringResource`/`pluralStringResource`; in
+non-Compose code (`Notifier`) use `ctx.getString` / `ctx.resources
+.getQuantityString`. Recurrence labels go through `repeatLabel(ctx, code)`;
+counts ("Every N days", "+N more") use `<plurals>` so Russian's one/few/many
+forms are correct. Drawer `Filter.name` stays an English key ("Notes" /
+"Reminders" / "Archive") — `filterTitle()` localizes it for display. Languages
+are declared in `res/xml/locales_config.xml` (per-app language picker, API 33+).
+Date/time text is already locale-aware via `SimpleDateFormat(..., Locale
+.getDefault())`.
 
 ## Data model (SQLite, 5 tables, schema v5)
 

@@ -1,3 +1,108 @@
 <resources>
-    <string name="app_name">Keeper</string>
+    <string name="app_name" translatable="false">Keeper</string>
+
+    <!-- Drawer / filters -->
+    <string name="notes">Notes</string>
+    <string name="reminders">Reminders</string>
+    <string name="archive">Archive</string>
+    <string name="edit_labels">Edit labels</string>
+    <string name="export_db">Export database</string>
+    <string name="import_db">Import database</string>
+    <string name="reminder_reliability">Reminder reliability</string>
+
+    <!-- Top bar / grid -->
+    <string name="menu">Menu</string>
+    <string name="search">Search</string>
+    <string name="search_notes">Search notes</string>
+    <string name="new_note">New note</string>
+    <string name="no_matching_notes">No matching notes</string>
+    <string name="nothing_here_yet">Nothing here yet</string>
+    <string name="pinned">Pinned</string>
+    <string name="more_items">+%d more</string>
+
+    <!-- Editor -->
+    <string name="back">Back</string>
+    <string name="pin">Pin</string>
+    <string name="more">More</string>
+    <string name="open">Open</string>
+    <string name="color">Color</string>
+    <string name="switch_to_text">Switch to text</string>
+    <string name="switch_to_checklist">Switch to checklist</string>
+    <string name="labels">Labels</string>
+    <string name="unarchive">Unarchive</string>
+    <string name="delete">Delete</string>
+    <string name="title_hint">Title</string>
+    <string name="list_item_hint">List item</string>
+    <string name="note_hint">Note</string>
+    <string name="add_item">Add item</string>
+    <string name="remove_item">Remove item</string>
+
+    <!-- Reminder dialog -->
+    <string name="reminder">Reminder</string>
+    <string name="date">Date</string>
+    <string name="today">Today</string>
+    <string name="tomorrow">Tomorrow</string>
+    <string name="next_weekday">Next %s</string>
+    <string name="pick_date">Pick a date…</string>
+    <string name="time">Time</string>
+    <string name="morning_preset">Morning · 08:00</string>
+    <string name="afternoon_preset">Afternoon · 13:00</string>
+    <string name="evening_preset">Evening · 18:00</string>
+    <string name="pick_time">Pick a time…</string>
+    <string name="repeat">Repeat</string>
+    <string name="custom_interval_ellipsis">Custom interval…</string>
+    <string name="save">Save</string>
+    <string name="remove">Remove</string>
+    <string name="cancel">Cancel</string>
+
+    <!-- Repeat labels -->
+    <string name="does_not_repeat">Does not repeat</string>
+    <string name="daily">Daily</string>
+    <string name="weekly">Weekly</string>
+    <string name="monthly">Monthly</string>
+    <string name="yearly">Yearly</string>
+    <plurals name="every_days">
+        <item quantity="one">Every %d day</item>
+        <item quantity="other">Every %d days</item>
+    </plurals>
+    <plurals name="every_weeks">
+        <item quantity="one">Every %d week</item>
+        <item quantity="other">Every %d weeks</item>
+    </plurals>
+    <plurals name="every_months">
+        <item quantity="one">Every %d month</item>
+        <item quantity="other">Every %d months</item>
+    </plurals>
+    <plurals name="every_years">
+        <item quantity="one">Every %d year</item>
+        <item quantity="other">Every %d years</item>
+    </plurals>
+
+    <!-- Custom interval dialog -->
+    <string name="custom_interval">Custom interval</string>
+    <string name="repeat_every">Repeat every</string>
+    <string name="unit">Unit</string>
+    <string name="unit_days">days</string>
+    <string name="unit_weeks">weeks</string>
+    <string name="unit_months">months</string>
+    <string name="unit_years">years</string>
+
+    <!-- Label dialogs -->
+    <string name="new_label">New label</string>
+    <string name="add_label">Add label</string>
+    <string name="delete_label">Delete label</string>
+    <string name="done">Done</string>
+
+    <!-- Reminder reliability dialog -->
+    <string name="reliability_intro">Reminders use exact alarms. Some phones — Xiaomi/MIUI especially — still freeze the app and delay or drop them. Grant these so reminders fire on time:</string>
+    <string name="reliability_battery">Battery: set \"No restrictions\"</string>
+    <string name="reliability_autostart">Allow Autostart (MIUI)</string>
+    <string name="reliability_notifications">Notification settings</string>
+    <string name="reliability_exact">Allow exact alarms</string>
+    <string name="reliability_outro">Also, in the recent-apps view: lock Keeper (padlock icon) so the system keeps it running, and don\'t swipe it away.</string>
+
+    <!-- Notifications -->
+    <string name="channel_delivery">Reminder delivery</string>
+    <string name="delivering_reminder">Delivering reminder…</string>
+    <string name="snooze_1_hour">1 hour</string>
 </resources>
