@@ -10,6 +10,8 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.media.AudioAttributes
+import android.media.RingtoneManager
 import android.os.Build
 import android.os.IBinder
 import androidx.core.content.ContextCompat
@@ -41,12 +43,28 @@ object Notifier {
 
     private fun ensureChannel(ctx: Context) {
         if (nm(ctx).getNotificationChannel(CHANNEL) == null) {
-            nm(ctx).createNotificationChannel(
-                NotificationChannel(
-                    CHANNEL, ctx.getString(R.string.reminders),
-                    NotificationManager.IMPORTANCE_HIGH,
+            // Match Keep: the device's default notification sound + vibration on
+            // a user-configurable channel. IMPORTANCE_HIGH already implies these,
+            // but set them explicitly so intent is clear and robust. Channel
+            // settings are immutable once created — never change CHANNEL's id, or
+            // a user's own sound/vibration tweaks would be wiped.
+            val channel = NotificationChannel(
+                CHANNEL, ctx.getString(R.string.reminders),
+                NotificationManager.IMPORTANCE_HIGH,
+            ).apply {
+                description = ctx.getString(R.string.channel_reminders_desc)
+                setSound(
+                    RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build(),
                 )
-            )
+                enableVibration(true)
+                enableLights(true)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            }
+            nm(ctx).createNotificationChannel(channel)
         }
     }
 

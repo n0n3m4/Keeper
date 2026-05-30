@@ -102,6 +102,7 @@
     <string name="reliability_outro">Además, en la vista de apps recientes: bloquea Keeper (icono del candado) para que el sistema lo mantenga en ejecución, y no lo deslices para cerrarlo.</string>
 
     <!-- Notifications -->
+    <string name="channel_reminders_desc">Notificaciones cuando vence el recordatorio de una nota.</string>
     <string name="channel_delivery">Entrega de recordatorios</string>
     <string name="delivering_reminder">Entregando recordatorio…</string>
     <string name="snooze_1_hour">1 hora</string>

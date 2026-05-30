@@ -102,6 +102,7 @@
     <string name="reliability_outro">Also, in the recent-apps view: lock Keeper (padlock icon) so the system keeps it running, and don\'t swipe it away.</string>
 
     <!-- Notifications -->
+    <string name="channel_reminders_desc">Notifications when a note reminder is due.</string>
     <string name="channel_delivery">Reminder delivery</string>
     <string name="delivering_reminder">Delivering reminder…</string>
     <string name="snooze_1_hour">1 hour</string>

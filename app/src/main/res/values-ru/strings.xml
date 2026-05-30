@@ -110,6 +110,7 @@
     <string name="reliability_outro">Также в списке недавних приложений закрепите Keeper (значок замка), чтобы система не выгружала его, и не смахивайте его.</string>
 
     <!-- Notifications -->
+    <string name="channel_reminders_desc">Уведомления, когда наступает время напоминания о заметке.</string>
     <string name="channel_delivery">Доставка напоминаний</string>
     <string name="delivering_reminder">Доставка напоминания…</string>
     <string name="snooze_1_hour">1 час</string>
