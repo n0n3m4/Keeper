@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 88">
+  <path d="M 42,22 54.065,24.28 64,22 42,0 38.965,10.43 Z" fill="#f29900" />
+  <path d="M 42,22 V 0 H 6 C 2.685,0 0,2.685 0,6 v 76 c 0,3.315 2.685,6 6,6 h 52 c 3.315,0 6,-2.685 6,-6 V 22 Z" fill="#fbbc04" />
+  <!-- Outline-only shield -->
+  <path d="M 18.5 28 H 45.5 V 43 C 45.5 52.5 39.8 59.8 32 63.2 C 24.2 59.8 18.5 52.5 18.5 43 Z" fill="none" stroke="#fff" stroke-width="3.4" stroke-linejoin="round" />
+</svg>
