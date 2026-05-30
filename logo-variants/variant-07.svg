@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 88">
-  <path d="M 42,22 54.065,24.28 64,22 42,0 38.965,10.43 Z" fill="#f29900" />
-  <path d="M 42,22 V 0 H 6 C 2.685,0 0,2.685 0,6 v 76 c 0,3.315 2.685,6 6,6 h 52 c 3.315,0 6,-2.685 6,-6 V 22 Z" fill="#fbbc04" />
-  <!-- Modern rounded-square shield, solid -->
-  <path d="M 32 25 C 38 27 43 28 46 28 V 44 C 46 54 40 61 32 64 C 24 61 18 54 18 44 V 28 C 21 28 26 27 32 25 Z" fill="#fff" />
-</svg>
