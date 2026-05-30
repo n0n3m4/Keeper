@@ -7,18 +7,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 // Roboto (FontFamily.Default on Android) at Google Keep's text sizes, following
-// the Material 3 type scale. Titles use Medium (500) — the weight Keep gives a
-// note title — and sit one step larger than the body they head, so a title reads
-// as clearly bolder *and* bigger than its note text, both on a tile and in the
-// editor (Material titleMedium 16sp over bodyMedium 14sp; titleLarge 22sp over
-// bodyLarge 16sp).
+// the Material 3 type scale. A title sits one step larger than the body it heads
+// so it reads as clearly bigger. Weights match Keep: the compact tile title is
+// SemiBold (600) so it stays emphatic at 16sp, while the larger editor title
+// carries enough weight at Medium (500). (minSdk 31 ships Roboto as a variable
+// font, so 600 renders as a true SemiBold rather than rounding to Bold.)
 val Typography = Typography(
     titleLarge = TextStyle(            // note editor title
         fontFamily = FontFamily.Default, fontWeight = FontWeight.Medium,
-        fontSize = 22.sp, lineHeight = 28.sp,
+        fontSize = 24.sp, lineHeight = 32.sp,
     ),
     titleMedium = TextStyle(           // note tile title
-        fontFamily = FontFamily.Default, fontWeight = FontWeight.Medium,
+        fontFamily = FontFamily.Default, fontWeight = FontWeight.SemiBold,
         fontSize = 16.sp, lineHeight = 24.sp,
     ),
     titleSmall = TextStyle(            // link preview chip title

@@ -57,6 +57,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -569,6 +570,10 @@ fun NoteTile(
                 }
                 if (note.pinned) Icon(Icons.Default.Star, stringResource(R.string.pinned), Modifier.size(18.dp))
             }
+            // Keep gives a tile title airier breathing room before its text —
+            // roughly twice the title's x-height (16sp · ~0.53 ≈ 8.5sp, ×2 ≈
+            // 17sp, of which the line boxes already supply ~7sp).
+            if (note.title.isNotBlank()) Spacer(Modifier.height(10.dp))
             if (note.checklist) {
                 note.items.take(8).forEach { item ->
                     Text(
@@ -948,32 +953,40 @@ fun NoteEditor(
                 colors = clearFieldColors(), modifier = Modifier.fillMaxWidth(),
                 textStyle = MaterialTheme.typography.titleLarge,
             )
+            // The title and the body/checklist are both TextFields, whose default
+            // ~16dp content padding stacks into too wide a gap (3+× the title's
+            // x-height). The simple M3 TextField overload can't take a smaller
+            // contentPadding, so nudge the content up by 8dp — bringing the
+            // title↔text distance to ~2.5× the 24sp title's x-height, like Keep.
+            val tightenTitleGap = Modifier.offset(y = (-8).dp)
             if (checklist) {
-                items.forEachIndexed { i, item ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(
-                            checked = item.checked,
-                            onCheckedChange = { items[i] = item.copy(checked = it) },
-                        )
-                        TextField(
-                            value = item.text,
-                            onValueChange = { items[i] = item.copy(text = it) },
-                            placeholder = { Text(stringResource(R.string.list_item_hint)) },
-                            colors = clearFieldColors(), singleLine = true,
-                            modifier = Modifier.weight(1f),
-                        )
-                        IconButton(onClick = { items.removeAt(i) }) {
-                            Icon(Icons.Default.Close, stringResource(R.string.remove_item))
+                Column(tightenTitleGap) {
+                    items.forEachIndexed { i, item ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(
+                                checked = item.checked,
+                                onCheckedChange = { items[i] = item.copy(checked = it) },
+                            )
+                            TextField(
+                                value = item.text,
+                                onValueChange = { items[i] = item.copy(text = it) },
+                                placeholder = { Text(stringResource(R.string.list_item_hint)) },
+                                colors = clearFieldColors(), singleLine = true,
+                                modifier = Modifier.weight(1f),
+                            )
+                            IconButton(onClick = { items.removeAt(i) }) {
+                                Icon(Icons.Default.Close, stringResource(R.string.remove_item))
+                            }
                         }
                     }
-                }
-                TextButton(
-                    onClick = { items.add(Item()) },
-                    modifier = Modifier.padding(start = 8.dp),
-                ) {
-                    Icon(Icons.Default.Add, null)
-                    Spacer(Modifier.width(4.dp))
-                    Text(stringResource(R.string.add_item))
+                    TextButton(
+                        onClick = { items.add(Item()) },
+                        modifier = Modifier.padding(start = 8.dp),
+                    ) {
+                        Icon(Icons.Default.Add, null)
+                        Spacer(Modifier.width(4.dp))
+                        Text(stringResource(R.string.add_item))
+                    }
                 }
             } else {
                 TextField(
@@ -981,7 +994,7 @@ fun NoteEditor(
                     placeholder = { Text(stringResource(R.string.note_hint)) },
                     colors = clearFieldColors(),
                     visualTransformation = LinkUnderline,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp),
+                    modifier = tightenTitleGap.fillMaxWidth().heightIn(min = 120.dp),
                 )
             }
 
