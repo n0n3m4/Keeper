@@ -85,6 +85,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -272,6 +273,7 @@ fun App(openState: androidx.compose.runtime.MutableLongState) {
     var editing by remember { mutableStateOf<Note?>(null) }
     var showLabelManager by remember { mutableStateOf(false) }
     var showReliabilityHelp by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
 
     fun reload() {
         labels = Db.labels()
@@ -415,6 +417,12 @@ fun App(openState: androidx.compose.runtime.MutableLongState) {
                 )
                 HorizontalDivider(Modifier.padding(12.dp))
                 NavigationDrawerItem(
+                    label = { Text(stringResource(R.string.settings)) }, selected = false,
+                    icon = { Icon(Icons.Default.Settings, null) },
+                    onClick = { showSettings = true; scope.launch { drawer.close() } },
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                )
+                NavigationDrawerItem(
                     label = { Text(stringResource(R.string.reminder_reliability)) }, selected = false,
                     icon = { Icon(Icons.Default.Notifications, null) },
                     onClick = { showReliabilityHelp = true; scope.launch { drawer.close() } },
@@ -523,6 +531,10 @@ fun App(openState: androidx.compose.runtime.MutableLongState) {
 
     if (showReliabilityHelp) {
         ReliabilityDialog(onDismiss = { showReliabilityHelp = false })
+    }
+
+    if (showSettings) {
+        SettingsDialog(onDismiss = { showSettings = false })
     }
 }
 
@@ -775,6 +787,9 @@ fun NoteEditor(
     var archived by remember { mutableStateOf(note.archived) }
     var reminderAt by remember { mutableLongStateOf(note.reminderAt) }
     var reminderRepeat by remember { mutableStateOf(note.reminderRepeat) }
+    // Mirrors note.reminderFired as Compose state so the chip un-dims the moment
+    // the reminder is rescheduled, before persist()/reload() rebuild the note.
+    var reminderFired by remember { mutableStateOf(note.reminderFired) }
     val items = remember { note.items.toMutableStateList() }
     val labelIds = remember { note.labelIds.toMutableStateList() }
     var links by remember { mutableStateOf(Db.links(note.id)) }
@@ -1012,7 +1027,7 @@ fun NoteEditor(
                 Row(Modifier.padding(start = 16.dp, top = 2.dp, bottom = 4.dp)) {
                     ReminderChip(
                         reminderAt, reminderRepeat,
-                        dimmed = reminderInactive(reminderAt, reminderRepeat, note.reminderFired),
+                        dimmed = reminderInactive(reminderAt, reminderRepeat, reminderFired),
                         onClick = { showReminder = true },
                     )
                 }
@@ -1030,7 +1045,10 @@ fun NoteEditor(
     if (showReminder) {
         ReminderDialog(
             at = reminderAt, repeat = reminderRepeat,
-            onSet = { at, rep -> reminderAt = at; reminderRepeat = rep; showReminder = false },
+            onSet = { at, rep ->
+                if (at != reminderAt || rep != reminderRepeat) reminderFired = false
+                reminderAt = at; reminderRepeat = rep; showReminder = false
+            },
             onRemove = { reminderAt = 0L; reminderRepeat = "NONE"; showReminder = false },
             onDismiss = { showReminder = false },
         )
@@ -1110,7 +1128,7 @@ fun ReminderDialog(
     onDismiss: () -> Unit,
 ) {
     val ctx = LocalContext.current
-    var time by remember { mutableLongStateOf(if (at > 0L) at else preset(18, 0)) }
+    var time by remember { mutableLongStateOf(if (at > 0L) at else preset(Prefs.evening(ctx).first, 0)) }
     var rep by remember { mutableStateOf(repeat) }
     var showCustom by remember { mutableStateOf(false) }
 
@@ -1144,17 +1162,20 @@ fun ReminderDialog(
                     )
                 }
                 DropdownField(stringResource(R.string.time), timeFmt.format(Date(time))) { close ->
+                    val (mh, mm) = Prefs.morning(ctx)
+                    val (ah, am) = Prefs.afternoon(ctx)
+                    val (eh, em) = Prefs.evening(ctx)
                     DropdownMenuItem(
-                        text = { Text(stringResource(R.string.morning_preset)) },
-                        onClick = { time = withTime(time, 8, 0); close() },
+                        text = { Text("${stringResource(R.string.morning_preset)} · ${timeFmt.format(Date(withTime(time, mh, mm)))}") },
+                        onClick = { time = withTime(time, mh, mm); close() },
                     )
                     DropdownMenuItem(
-                        text = { Text(stringResource(R.string.afternoon_preset)) },
-                        onClick = { time = withTime(time, 13, 0); close() },
+                        text = { Text("${stringResource(R.string.afternoon_preset)} · ${timeFmt.format(Date(withTime(time, ah, am)))}") },
+                        onClick = { time = withTime(time, ah, am); close() },
                     )
                     DropdownMenuItem(
-                        text = { Text(stringResource(R.string.evening_preset)) },
-                        onClick = { time = withTime(time, 18, 0); close() },
+                        text = { Text("${stringResource(R.string.evening_preset)} · ${timeFmt.format(Date(withTime(time, eh, em)))}") },
+                        onClick = { time = withTime(time, eh, em); close() },
                     )
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.pick_time)) },
@@ -1470,6 +1491,54 @@ fun ReliabilityDialog(onDismiss: () -> Unit) {
     )
 }
 
+/** Lets the user retime the three reminder presets (Morning/Afternoon/Evening).
+ *  Each tap opens the platform time picker; the choice is saved to [Prefs] and
+ *  picked up the next time the reminder dialog is opened. */
+@Composable
+fun SettingsDialog(onDismiss: () -> Unit) {
+    val ctx = LocalContext.current
+    var morning by remember { mutableStateOf(Prefs.morning(ctx)) }
+    var afternoon by remember { mutableStateOf(Prefs.afternoon(ctx)) }
+    var evening by remember { mutableStateOf(Prefs.evening(ctx)) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.preset_times)) },
+        text = {
+            Column {
+                PresetRow(stringResource(R.string.morning_preset), "morning", morning) { morning = it }
+                PresetRow(stringResource(R.string.afternoon_preset), "afternoon", afternoon) { afternoon = it }
+                PresetRow(stringResource(R.string.evening_preset), "evening", evening) { evening = it }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.done)) } },
+    )
+}
+
+/** One row of [SettingsDialog]: a preset [label] and its current time; tapping
+ *  picks a new time, saves it under [key], and reports it back via [onChange]. */
+@Composable
+private fun PresetRow(label: String, key: String, value: Pair<Int, Int>, onChange: (Pair<Int, Int>) -> Unit) {
+    val ctx = LocalContext.current
+    val timeFmt = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+    val ms = withTime(System.currentTimeMillis(), value.first, value.second)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable {
+                pickTime(ctx, ms) {
+                    val c = Calendar.getInstance().apply { timeInMillis = it }
+                    val hm = c.get(Calendar.HOUR_OF_DAY) to c.get(Calendar.MINUTE)
+                    Prefs.set(ctx, key, hm.first, hm.second); onChange(hm)
+                }
+            }
+            .padding(vertical = 14.dp),
+    ) {
+        Text(label, Modifier.weight(1f))
+        Text(timeFmt.format(Date(ms)))
+    }
+}
+
 /* ---- small helpers ---- */
 
 /** Returns (background, foreground) for a note colour index. */
@@ -1487,6 +1556,17 @@ fun clearFieldColors() = TextFieldDefaults.colors(
     unfocusedIndicatorColor = Color.Transparent,
     disabledIndicatorColor = Color.Transparent,
 )
+
+/** App preferences (device-local; not part of the DB export/import). Currently
+ *  just the three configurable reminder time presets, each an (hour, minute). */
+object Prefs {
+    private fun p(ctx: Context) = ctx.getSharedPreferences("keeper_settings", Context.MODE_PRIVATE)
+    fun morning(ctx: Context) = p(ctx).getInt("morning_h", 8) to p(ctx).getInt("morning_m", 0)
+    fun afternoon(ctx: Context) = p(ctx).getInt("afternoon_h", 13) to p(ctx).getInt("afternoon_m", 0)
+    fun evening(ctx: Context) = p(ctx).getInt("evening_h", 18) to p(ctx).getInt("evening_m", 0)
+    fun set(ctx: Context, key: String, h: Int, m: Int) =
+        p(ctx).edit().putInt("${key}_h", h).putInt("${key}_m", m).apply()
+}
 
 /** A future preset time at a given hour of day. */
 fun preset(hour: Int, addDays: Int): Long = Calendar.getInstance().apply {

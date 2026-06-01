@@ -8,6 +8,7 @@
     <string name="edit_labels">Изменить ярлыки</string>
     <string name="export_db">Экспорт базы данных</string>
     <string name="import_db">Импорт базы данных</string>
+    <string name="settings">Настройки</string>
     <string name="reminder_reliability">Надёжность напоминаний</string>
 
     <!-- Top bar / grid -->
@@ -45,9 +46,9 @@
     <string name="next_weekday">Через неделю (%s)</string>
     <string name="pick_date">Выбрать дату…</string>
     <string name="time">Время</string>
-    <string name="morning_preset">Утро · 08:00</string>
-    <string name="afternoon_preset">День · 13:00</string>
-    <string name="evening_preset">Вечер · 18:00</string>
+    <string name="morning_preset">Утро</string>
+    <string name="afternoon_preset">День</string>
+    <string name="evening_preset">Вечер</string>
     <string name="pick_time">Выбрать время…</string>
     <string name="repeat">Повтор</string>
     <string name="custom_interval_ellipsis">Свой интервал…</string>
@@ -108,6 +109,9 @@
     <string name="reliability_notifications">Настройки уведомлений</string>
     <string name="reliability_exact">Разрешить точные будильники</string>
     <string name="reliability_outro">Также в списке недавних приложений закрепите Keeper (значок замка), чтобы система не выгружала его, и не смахивайте его.</string>
+
+    <!-- Settings dialog -->
+    <string name="preset_times">Время напоминаний по умолчанию</string>
 
     <!-- Notifications -->
     <string name="channel_reminders_desc">Уведомления, когда наступает время напоминания о заметке.</string>

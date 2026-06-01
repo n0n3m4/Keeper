@@ -8,6 +8,7 @@
     <string name="edit_labels">Editar etiquetas</string>
     <string name="export_db">Exportar base de datos</string>
     <string name="import_db">Importar base de datos</string>
+    <string name="settings">Ajustes</string>
     <string name="reminder_reliability">Fiabilidad de recordatorios</string>
 
     <!-- Top bar / grid -->
@@ -45,9 +46,9 @@
     <string name="next_weekday">Próximo %s</string>
     <string name="pick_date">Elegir una fecha…</string>
     <string name="time">Hora</string>
-    <string name="morning_preset">Mañana · 08:00</string>
-    <string name="afternoon_preset">Tarde · 13:00</string>
-    <string name="evening_preset">Noche · 18:00</string>
+    <string name="morning_preset">Mañana</string>
+    <string name="afternoon_preset">Tarde</string>
+    <string name="evening_preset">Noche</string>
     <string name="pick_time">Elegir una hora…</string>
     <string name="repeat">Repetir</string>
     <string name="custom_interval_ellipsis">Intervalo personalizado…</string>
@@ -100,6 +101,9 @@
     <string name="reliability_notifications">Ajustes de notificaciones</string>
     <string name="reliability_exact">Permitir alarmas exactas</string>
     <string name="reliability_outro">Además, en la vista de apps recientes: bloquea Keeper (icono del candado) para que el sistema lo mantenga en ejecución, y no lo deslices para cerrarlo.</string>
+
+    <!-- Settings dialog -->
+    <string name="preset_times">Horas de recordatorio predeterminadas</string>
 
     <!-- Notifications -->
     <string name="channel_reminders_desc">Notificaciones cuando vence el recordatorio de una nota.</string>
