@@ -94,6 +94,12 @@
     <string name="delete_label">Delete label</string>
     <string name="done">Done</string>
 
+    <!-- Multi-select -->
+    <plurals name="delete_notes_question">
+        <item quantity="one">Delete %d note?</item>
+        <item quantity="other">Delete %d notes?</item>
+    </plurals>
+
     <!-- Reminder reliability dialog -->
     <string name="reliability_intro">Reminders use exact alarms. Some phones — Xiaomi/MIUI especially — still freeze the app and delay or drop them. Grant these so reminders fire on time:</string>
     <string name="reliability_battery">Battery: set \"No restrictions\"</string>

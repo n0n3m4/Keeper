@@ -115,6 +115,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -275,6 +276,13 @@ fun App(openState: androidx.compose.runtime.MutableLongState) {
     var showReliabilityHelp by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
 
+    // Multi-select (long-press a tile). Non-empty = selection mode: the app
+    // bar swaps to ✕ / count / bulk actions, and taps toggle instead of open.
+    val selected = remember { mutableStateListOf<Long>() }
+    var showBulkColors by remember { mutableStateOf(false) }
+    var showBulkLabels by remember { mutableStateOf(false) }
+    var showBulkDelete by remember { mutableStateOf(false) }
+
     fun reload() {
         labels = Db.labels()
         notes = Db.notes(filter.archived, filter.reminders, filter.labelId, search)
@@ -362,6 +370,7 @@ fun App(openState: androidx.compose.runtime.MutableLongState) {
     } else {
     ModalNavigationDrawer(
         drawerState = drawer,
+        gesturesEnabled = selected.isEmpty(),   // no drawer swipe while selecting
         drawerContent = {
             ModalDrawerSheet {
                 Text(
@@ -370,7 +379,7 @@ fun App(openState: androidx.compose.runtime.MutableLongState) {
                     modifier = Modifier.padding(24.dp),
                 )
                 fun go(f: Filter) {
-                    filter = f; search = ""; searching = false
+                    filter = f; search = ""; searching = false; selected.clear()
                     scope.launch { drawer.close() }
                 }
                 NavigationDrawerItem(
@@ -431,8 +440,58 @@ fun App(openState: androidx.compose.runtime.MutableLongState) {
             }
         },
     ) {
+        // In selection mode, Back drops the selection instead of leaving.
+        BackHandler(enabled = selected.isNotEmpty()) { selected.clear() }
         Scaffold(
             topBar = {
+                if (selected.isNotEmpty()) {
+                    // Keep-style selection bar: ✕, count, bulk actions. No
+                    // reminder action — a shared time makes no sense for a group.
+                    val allPinned = notes.filter { it.id in selected }.all { it.pinned }
+                    var bulkMenu by remember { mutableStateOf(false) }
+                    fun done() { reload(); selected.clear() }
+                    TopAppBar(
+                        navigationIcon = {
+                            IconButton(onClick = { selected.clear() }) {
+                                Icon(Icons.Default.Close, stringResource(R.string.cancel))
+                            }
+                        },
+                        title = { Text("${selected.size}") },
+                        actions = {
+                            // Like Keep: pin all unless every one is already pinned.
+                            IconButton(onClick = { Db.setPinned(selected.toList(), !allPinned); done() }) {
+                                val tint = MaterialTheme.colorScheme.onSurface
+                                Icon(
+                                    Icons.Default.Star, stringResource(R.string.pin),
+                                    tint = if (allPinned) tint else tint.copy(alpha = 0.4f),
+                                )
+                            }
+                            IconButton(onClick = { showBulkColors = true }) {
+                                Icon(PaletteIcon, stringResource(R.string.color))
+                            }
+                            IconButton(onClick = { showBulkLabels = true }) {
+                                Icon(Icons.AutoMirrored.Filled.List, stringResource(R.string.labels))
+                            }
+                            IconButton(onClick = { bulkMenu = true }) {
+                                Icon(Icons.Default.MoreVert, stringResource(R.string.more))
+                            }
+                            DropdownMenu(expanded = bulkMenu, onDismissRequest = { bulkMenu = false }) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(if (filter.archived) R.string.unarchive else R.string.archive)) },
+                                    onClick = {
+                                        bulkMenu = false
+                                        Db.setArchived(selected.toList(), !filter.archived)
+                                        done()
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.delete)) },
+                                    onClick = { bulkMenu = false; showBulkDelete = true },
+                                )
+                            }
+                        },
+                    )
+                } else {
                 TopAppBar(
                     navigationIcon = {
                         IconButton(onClick = { scope.launch { drawer.open() } }) {
@@ -474,10 +533,12 @@ fun App(openState: androidx.compose.runtime.MutableLongState) {
                         }
                     },
                 )
+                } // else (normal bar)
             },
             floatingActionButton = {
-                // No "create" button in Archive — a new note is never archived.
-                if (!filter.archived) {
+                // No "create" button in Archive — a new note is never archived —
+                // and none while selecting, like Keep.
+                if (!filter.archived && selected.isEmpty()) {
                     FloatingActionButton(onClick = { editing = Note() }) {
                         Icon(Icons.Default.Add, stringResource(R.string.new_note))
                     }
@@ -505,12 +566,24 @@ fun App(openState: androidx.compose.runtime.MutableLongState) {
                         ReorderableItem(reorderState, key = note.id) {
                             NoteTile(
                                 note, labels,
+                                // Long-press = select (and pick up for reorder),
+                                // exactly like Keep: releasing without moving
+                                // just leaves the note selected.
                                 Modifier.longPressDraggableHandle(
+                                    onDragStarted = {
+                                        if (note.id !in selected) selected.add(note.id)
+                                    },
                                     onDragStopped = { Db.reorder(notes.map { it.id }) },
                                 ),
                                 sharedScope = this@SharedTransitionLayout,
                                 animScope = this@AnimatedContent,
-                            ) { editing = note }
+                                selected = note.id in selected,
+                                selecting = selected.isNotEmpty(),
+                            ) {
+                                if (selected.isNotEmpty()) {
+                                    if (!selected.remove(note.id)) selected.add(note.id)
+                                } else editing = note
+                            }
                         }
                     }
                 }
@@ -536,6 +609,62 @@ fun App(openState: androidx.compose.runtime.MutableLongState) {
     if (showSettings) {
         SettingsDialog(onDismiss = { showSettings = false })
     }
+
+    /* -- bulk (multi-select) dialogs -- */
+
+    if (showBulkColors) {
+        AlertDialog(
+            onDismissRequest = { showBulkColors = false },
+            title = { Text(stringResource(R.string.color)) },
+            text = {
+                // Highlight the shared colour, or nothing when they differ.
+                val common = notes.filter { it.id in selected }
+                    .map { it.color }.distinct().singleOrNull() ?: -1
+                ColorBar(common) { idx ->
+                    Db.setColor(selected.toList(), idx)
+                    showBulkColors = false
+                    reload(); selected.clear()
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showBulkColors = false }) { Text(stringResource(R.string.cancel)) }
+            },
+        )
+    }
+
+    if (showBulkLabels) {
+        // A box is ticked only when every selected note carries the label;
+        // toggling then adds it to all (or removes it from all).
+        val common = labels.filter { l ->
+            notes.filter { it.id in selected }.all { l.id in it.labelIds }
+        }.map { it.id }
+        LabelPickerDialog(
+            labels = labels,
+            selected = common,
+            onToggle = { id -> Db.setLabel(selected.toList(), id, id !in common); reload() },
+            onAddLabel = { name -> Db.addLabel(name); labels = Db.labels() },
+            onDismiss = { showBulkLabels = false; reload(); selected.clear() },
+        )
+    }
+
+    if (showBulkDelete) {
+        AlertDialog(
+            onDismissRequest = { showBulkDelete = false },
+            text = {
+                Text(pluralStringResource(R.plurals.delete_notes_question, selected.size, selected.size))
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showBulkDelete = false
+                    selected.forEach { Db.delete(it); Notifier.cancel(ctx, it) }
+                    reload(); selected.clear()
+                }) { Text(stringResource(R.string.delete)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBulkDelete = false }) { Text(stringResource(R.string.cancel)) }
+            },
+        )
+    }
 }
 
 /* ---- note grid tile ---- */
@@ -547,6 +676,8 @@ fun NoteTile(
     modifier: Modifier,
     sharedScope: SharedTransitionScope,
     animScope: AnimatedVisibilityScope,
+    selected: Boolean = false,
+    selecting: Boolean = false,
     onClick: () -> Unit,
 ) {
     val (bg, fg) = noteColors(note.color)
@@ -565,7 +696,10 @@ fun NoteTile(
         modifier = cardModifier,
         onClick = onClick,
         colors = CardDefaults.cardColors(containerColor = bg, contentColor = fg),
-        border = if (note.color == 0) androidx.compose.foundation.BorderStroke(
+        // Selection draws Keep's thick dark outline over the usual hairline.
+        border = if (selected) androidx.compose.foundation.BorderStroke(
+            3.dp, MaterialTheme.colorScheme.primary,
+        ) else if (note.color == 0) androidx.compose.foundation.BorderStroke(
             1.dp, MaterialTheme.colorScheme.outlineVariant,
         ) else null,
     ) {
@@ -601,14 +735,18 @@ fun NoteTile(
                     )
             } else if (note.body.isNotBlank()) {
                 Text(
-                    linkified(note.body, clickable = true),
+                    // While selecting, URL taps must not open the browser — the
+                    // whole tile is one select-toggle target. Dropping the link
+                    // annotations on the long-press recomposition also swallows
+                    // the release of the very gesture that started selecting.
+                    linkified(note.body, clickable = !selecting),
                     maxLines = 12, overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
             if (note.links.any { it.status == "OK" }) {
                 Spacer(Modifier.height(6.dp))
-                LinkChips(note.links)
+                LinkChips(note.links, enabled = !selecting)
             }
             if (note.reminderAt > 0L) {
                 Spacer(Modifier.height(2.dp))
@@ -713,7 +851,7 @@ private val LinkUnderline = VisualTransformation { original ->
 /** The Keep-style link preview chip: favicon, page title, domain. Tapping it
  *  opens the URL. Only OK previews are passed here. */
 @Composable
-private fun LinkChip(link: Link) {
+private fun LinkChip(link: Link, enabled: Boolean = true) {
     val ctx = LocalContext.current
     val favicon = remember(link.favicon) {
         link.favicon?.let { BitmapFactory.decodeByteArray(it, 0, it.size)?.asImageBitmap() }
@@ -723,11 +861,13 @@ private fun LinkChip(link: Link) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
-            .clickable {
-                runCatching {
-                    ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link.url)))
-                }
-            }
+            .then(
+                if (enabled) Modifier.clickable {
+                    runCatching {
+                        ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link.url)))
+                    }
+                } else Modifier
+            )
             .background(Color.Black.copy(alpha = 0.06f))
             .padding(8.dp),
     ) {
@@ -759,11 +899,11 @@ private fun LinkChip(link: Link) {
 
 /** Stack of preview chips. A failed (or still-loading) link draws no chip. */
 @Composable
-private fun LinkChips(links: List<Link>, modifier: Modifier = Modifier) {
+private fun LinkChips(links: List<Link>, modifier: Modifier = Modifier, enabled: Boolean = true) {
     val ready = links.filter { it.status == "OK" }
     if (ready.isEmpty()) return
     Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        ready.forEach { LinkChip(it) }
+        ready.forEach { LinkChip(it, enabled) }
     }
 }
 

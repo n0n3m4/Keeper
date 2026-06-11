@@ -102,6 +102,14 @@
     <string name="delete_label">Удалить ярлык</string>
     <string name="done">Готово</string>
 
+    <!-- Multi-select -->
+    <plurals name="delete_notes_question">
+        <item quantity="one">Удалить %d заметку?</item>
+        <item quantity="few">Удалить %d заметки?</item>
+        <item quantity="many">Удалить %d заметок?</item>
+        <item quantity="other">Удалить %d заметки?</item>
+    </plurals>
+
     <!-- Reminder reliability dialog -->
     <string name="reliability_intro">Напоминания используют точные будильники. Некоторые телефоны — особенно Xiaomi/MIUI — всё равно замораживают приложение и задерживают или отменяют их. Выдайте эти разрешения, чтобы напоминания срабатывали вовремя:</string>
     <string name="reliability_battery">Батарея: выбрать «Без ограничений»</string>

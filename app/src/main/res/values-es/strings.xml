@@ -94,6 +94,12 @@
     <string name="delete_label">Eliminar etiqueta</string>
     <string name="done">Hecho</string>
 
+    <!-- Multi-select -->
+    <plurals name="delete_notes_question">
+        <item quantity="one">¿Eliminar %d nota?</item>
+        <item quantity="other">¿Eliminar %d notas?</item>
+    </plurals>
+
     <!-- Reminder reliability dialog -->
     <string name="reliability_intro">Los recordatorios usan alarmas exactas. Algunos teléfonos —Xiaomi/MIUI sobre todo— aún congelan la app y los retrasan o descartan. Concede estos permisos para que los recordatorios suenen a tiempo:</string>
     <string name="reliability_battery">Batería: ajustar a \"Sin restricciones\"</string>

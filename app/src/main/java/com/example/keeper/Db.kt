@@ -203,6 +203,42 @@ object Db {
         }
     }
 
+    /* ----- bulk updates (multi-select actions) -----
+     * Targeted UPDATEs rather than re-saving Note objects, so a concurrent
+     * reminder write from AlarmReceiver (snooze/fired) is never clobbered. */
+
+    private fun idList(ids: Collection<Long>) = ids.joinToString(",") { "?" }
+
+    private fun bulkSet(ids: Collection<Long>, fill: ContentValues.() -> Unit) {
+        if (ids.isEmpty()) return
+        val v = ContentValues().apply { fill(); put("modified", System.currentTimeMillis()) }
+        db.update("notes", v, "id IN (${idList(ids)})", ids.map { "$it" }.toTypedArray())
+    }
+
+    fun setPinned(ids: Collection<Long>, pinned: Boolean) =
+        bulkSet(ids) { put("pinned", if (pinned) 1 else 0) }
+
+    fun setColor(ids: Collection<Long>, color: Int) = bulkSet(ids) { put("color", color) }
+
+    fun setArchived(ids: Collection<Long>, archived: Boolean) =
+        bulkSet(ids) { put("archived", if (archived) 1 else 0) }
+
+    /** Adds (`on`) or removes the label on every note in `ids`. */
+    fun setLabel(ids: Collection<Long>, labelId: Long, on: Boolean) {
+        if (ids.isEmpty()) return
+        if (on) ids.forEach { id ->
+            db.insertWithOnConflict(
+                "note_labels", null,
+                ContentValues().apply { put("note_id", id); put("label_id", labelId) },
+                SQLiteDatabase.CONFLICT_IGNORE,
+            )
+        } else db.delete(
+            "note_labels",
+            "label_id=? AND note_id IN (${idList(ids)})",
+            (listOf("$labelId") + ids.map { "$it" }).toTypedArray(),
+        )
+    }
+
     /** True when the note holds no text/items — used to discard empty drafts. */
     fun isBlank(n: Note) =
         n.title.isBlank() && n.body.isBlank() && n.items.all { it.text.isBlank() }
