@@ -121,6 +121,23 @@
     <!-- Settings dialog -->
     <string name="preset_times">Время напоминаний по умолчанию</string>
 
+    <!-- Automatic backup -->
+    <string name="backup_title">Автоматическое резервное копирование</string>
+    <string name="backup_enable">Создавать резервные копии автоматически</string>
+    <string name="backup_folder">Папка для копий</string>
+    <string name="backup_folder_none">Не выбрана</string>
+    <string name="backup_now">Создать копию сейчас</string>
+    <string name="backup_last">Последняя копия: %s</string>
+    <string name="backup_never">Никогда</string>
+    <string name="backup_error_no_folder">Папка недоступна — выберите её заново</string>
+    <string name="backup_error_io">Не удалось создать копию</string>
+    <plurals name="backup_keep_summary">
+        <item quantity="one">Хранит %d последнюю копию, еженедельно</item>
+        <item quantity="few">Хранит %d последние копии, еженедельно</item>
+        <item quantity="many">Хранит %d последних копий, еженедельно</item>
+        <item quantity="other">Хранит %d последних копий, еженедельно</item>
+    </plurals>
+
     <!-- Notifications -->
     <string name="channel_reminders_desc">Уведомления, когда наступает время напоминания о заметке.</string>
     <string name="channel_delivery">Доставка напоминаний</string>

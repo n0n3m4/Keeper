@@ -111,6 +111,21 @@
     <!-- Settings dialog -->
     <string name="preset_times">Horas de recordatorio predeterminadas</string>
 
+    <!-- Automatic backup -->
+    <string name="backup_title">Copia de seguridad automática</string>
+    <string name="backup_enable">Hacer copia de seguridad automáticamente</string>
+    <string name="backup_folder">Carpeta de copias</string>
+    <string name="backup_folder_none">Sin definir</string>
+    <string name="backup_now">Hacer copia ahora</string>
+    <string name="backup_last">Última copia: %s</string>
+    <string name="backup_never">Nunca</string>
+    <string name="backup_error_no_folder">Carpeta no disponible: vuelve a elegirla</string>
+    <string name="backup_error_io">La última copia falló</string>
+    <plurals name="backup_keep_summary">
+        <item quantity="one">Conserva la copia más reciente, cada semana</item>
+        <item quantity="other">Conserva las %d copias más recientes, cada semana</item>
+    </plurals>
+
     <!-- Notifications -->
     <string name="channel_reminders_desc">Notificaciones cuando vence el recordatorio de una nota.</string>
     <string name="channel_delivery">Entrega de recordatorios</string>

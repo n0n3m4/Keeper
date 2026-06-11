@@ -104,6 +104,7 @@ import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -151,6 +152,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.keeper.theme.KeeperTheme
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -233,6 +235,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         Db.init(this)
         Notifier.rescheduleAll(this)              // safety net on every launch
+        AutoBackup.sync(this)                     // (re)register the periodic backup job
         requestBatteryExemption()
         openState.longValue = intent.getLongExtra("open", 0L)
         enableEdgeToEdge()
@@ -1668,17 +1671,94 @@ fun ReliabilityDialog(onDismiss: () -> Unit) {
 @Composable
 fun SettingsDialog(onDismiss: () -> Unit) {
     val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
     var morning by remember { mutableStateOf(Prefs.morning(ctx)) }
     var afternoon by remember { mutableStateOf(Prefs.afternoon(ctx)) }
     var evening by remember { mutableStateOf(Prefs.evening(ctx)) }
+
+    // Backup state. AutoBackup.version bumps after each run so the status line
+    // below re-reads Prefs (which a background worker may have written).
+    var backupOn by remember { mutableStateOf(Prefs.backupEnabled(ctx)) }
+    var folderUri by remember { mutableStateOf(Prefs.backupTreeUri(ctx)) }
+    val folderPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        uri?.let {
+            ctx.contentResolver.takePersistableUriPermission(
+                it,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+            )
+            Prefs.setBackupTreeUri(ctx, it.toString())
+            folderUri = it.toString()
+            AutoBackup.sync(ctx)
+        }
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.preset_times)) },
+        title = { Text(stringResource(R.string.settings)) },
         text = {
-            Column {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                Text(stringResource(R.string.preset_times), style = MaterialTheme.typography.titleSmall)
                 PresetRow(stringResource(R.string.morning_preset), "morning", morning) { morning = it }
                 PresetRow(stringResource(R.string.afternoon_preset), "afternoon", afternoon) { afternoon = it }
                 PresetRow(stringResource(R.string.evening_preset), "evening", evening) { evening = it }
+
+                HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                Text(stringResource(R.string.backup_title), style = MaterialTheme.typography.titleSmall)
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                ) {
+                    Text(stringResource(R.string.backup_enable), Modifier.weight(1f))
+                    Switch(checked = backupOn, onCheckedChange = {
+                        backupOn = it; Prefs.setBackupEnabled(ctx, it); AutoBackup.sync(ctx)
+                    })
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { folderPicker.launch(null) }
+                        .padding(vertical = 14.dp),
+                ) {
+                    Text(stringResource(R.string.backup_folder), Modifier.weight(1f))
+                    val label = remember(folderUri) { AutoBackup.folderLabel(ctx) }
+                    Text(label ?: stringResource(R.string.backup_folder_none))
+                }
+
+                val keep = Prefs.backupKeep(ctx)
+                Text(
+                    pluralStringResource(R.plurals.backup_keep_summary, keep, keep),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                // Re-read status whenever a run completes (worker or "Back up now").
+                val v = AutoBackup.version.intValue
+                val err = remember(v) { Prefs.backupError(ctx) }
+                val last = remember(v) { Prefs.lastBackup(ctx) }
+                val dateFmt = remember { SimpleDateFormat("d MMM HH:mm", Locale.getDefault()) }
+                val status = when {
+                    err != 0 -> stringResource(err)
+                    last > 0L -> stringResource(R.string.backup_last, dateFmt.format(Date(last)))
+                    else -> stringResource(R.string.backup_last, stringResource(R.string.backup_never))
+                }
+                Text(
+                    status,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (err != 0) MaterialTheme.colorScheme.error
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+
+                OutlinedButton(
+                    onClick = { scope.launch(Dispatchers.IO) { AutoBackup.runOnce(ctx) } },
+                    enabled = folderUri != null,
+                    modifier = Modifier.padding(top = 8.dp),
+                ) { Text(stringResource(R.string.backup_now)) }
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.done)) } },
@@ -1737,6 +1817,32 @@ object Prefs {
     fun evening(ctx: Context) = p(ctx).getInt("evening_h", 18) to p(ctx).getInt("evening_m", 0)
     fun set(ctx: Context, key: String, h: Int, m: Int) =
         p(ctx).edit().putInt("${key}_h", h).putInt("${key}_m", m).apply()
+
+    /* ---- automatic backup (see AutoBackup) ---- */
+
+    /** Persisted SAF tree URI for the backup folder, or null if not chosen. */
+    fun backupTreeUri(ctx: Context): String? = p(ctx).getString("backup_uri", null)
+    fun setBackupTreeUri(ctx: Context, uri: String?) =
+        p(ctx).edit().putString("backup_uri", uri).apply()
+
+    fun backupEnabled(ctx: Context) = p(ctx).getBoolean("backup_enabled", false)
+    fun setBackupEnabled(ctx: Context, on: Boolean) =
+        p(ctx).edit().putBoolean("backup_enabled", on).apply()
+
+    /** How many timestamped backups to retain in the folder. */
+    fun backupKeep(ctx: Context) = p(ctx).getInt("backup_keep", 5)
+
+    /** Epoch ms of the last successful backup; 0 = never. */
+    fun lastBackup(ctx: Context) = p(ctx).getLong("backup_last", 0L)
+    /** Records a success: stamps the time and clears any pending error. */
+    fun setLastBackup(ctx: Context, ms: Long) =
+        p(ctx).edit().putLong("backup_last", ms).putInt("backup_error", 0).apply()
+
+    /** String-resource id of the last backup error (0 = none), so the message
+     *  stays localized whenever it is later shown in the dialog. */
+    fun backupError(ctx: Context) = p(ctx).getInt("backup_error", 0)
+    fun setBackupError(ctx: Context, msgRes: Int) =
+        p(ctx).edit().putInt("backup_error", msgRes).apply()
 }
 
 /** A future preset time at a given hour of day. */

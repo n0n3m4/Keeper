@@ -111,6 +111,21 @@
     <!-- Settings dialog -->
     <string name="preset_times">Default reminder times</string>
 
+    <!-- Automatic backup -->
+    <string name="backup_title">Automatic backup</string>
+    <string name="backup_enable">Back up automatically</string>
+    <string name="backup_folder">Backup folder</string>
+    <string name="backup_folder_none">Not set</string>
+    <string name="backup_now">Back up now</string>
+    <string name="backup_last">Last backup: %s</string>
+    <string name="backup_never">Never</string>
+    <string name="backup_error_no_folder">Backup folder unavailable — pick it again</string>
+    <string name="backup_error_io">Last backup failed</string>
+    <plurals name="backup_keep_summary">
+        <item quantity="one">Keeps the most recent backup, weekly</item>
+        <item quantity="other">Keeps the %d most recent backups, weekly</item>
+    </plurals>
+
     <!-- Notifications -->
     <string name="channel_reminders_desc">Notifications when a note reminder is due.</string>
     <string name="channel_delivery">Reminder delivery</string>
