@@ -279,6 +279,10 @@ fun App(openState: androidx.compose.runtime.MutableLongState) {
     // Multi-select (long-press a tile). Non-empty = selection mode: the app
     // bar swaps to ✕ / count / bulk actions, and taps toggle instead of open.
     val selected = remember { mutableStateListOf<Long>() }
+    // A long-press starts both selection and a reorder pick-up. The Card's
+    // clickable still fires a tap on release, which would immediately toggle the
+    // just-selected note back off; this flag swallows that one trailing click.
+    var longPressActive by remember { mutableStateOf(false) }
     var showBulkColors by remember { mutableStateOf(false) }
     var showBulkLabels by remember { mutableStateOf(false) }
     var showBulkDelete by remember { mutableStateOf(false) }
@@ -343,6 +347,9 @@ fun App(openState: androidx.compose.runtime.MutableLongState) {
     val gridState = rememberLazyStaggeredGridState()
     val reorderState = rememberReorderableLazyStaggeredGridState(gridState) { from, to ->
         notes = notes.toMutableList().apply { add(to.index, removeAt(from.index)) }
+        // A reorder of a lone tentative selection means the user wanted to move
+        // it, not select it (Keep behavior) — leave selection mode.
+        if (selected.size <= 1) selected.clear()
     }
 
     // The tapped tile morphs into the editor (Keep-style shared-element
@@ -571,16 +578,24 @@ fun App(openState: androidx.compose.runtime.MutableLongState) {
                                 // just leaves the note selected.
                                 Modifier.longPressDraggableHandle(
                                     onDragStarted = {
+                                        longPressActive = true
                                         if (note.id !in selected) selected.add(note.id)
                                     },
-                                    onDragStopped = { Db.reorder(notes.map { it.id }) },
+                                    onDragStopped = {
+                                        longPressActive = false
+                                        Db.reorder(notes.map { it.id })
+                                    },
                                 ),
                                 sharedScope = this@SharedTransitionLayout,
                                 animScope = this@AnimatedContent,
                                 selected = note.id in selected,
                                 selecting = selected.isNotEmpty(),
                             ) {
-                                if (selected.isNotEmpty()) {
+                                if (longPressActive) {
+                                    // Trailing tap from the long-press that just
+                                    // selected this note — keep it selected.
+                                    longPressActive = false
+                                } else if (selected.isNotEmpty()) {
                                     if (!selected.remove(note.id)) selected.add(note.id)
                                 } else editing = note
                             }
