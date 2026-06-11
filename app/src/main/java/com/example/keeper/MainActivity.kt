@@ -451,10 +451,25 @@ fun App(openState: androidx.compose.runtime.MutableLongState) {
         BackHandler(enabled = selected.isNotEmpty()) { selected.clear() }
         Scaffold(
             topBar = {
-                if (selected.isNotEmpty()) {
+                // Keep the count stable while the selection bar fades out
+                // (`selected` is already empty by then) so it never flashes "0".
+                var selCount by remember { mutableStateOf(0) }
+                if (selected.isNotEmpty()) selCount = selected.size
+                AnimatedContent(
+                    targetState = selected.isNotEmpty(),
+                    label = "topBar",
+                    transitionSpec = {
+                        // Keep-style: the selection toolbar pulls down over the
+                        // normal bar (and retracts) — a vertical mirror of the
+                        // search field's horizontal swap.
+                        (fadeIn(tween(220)) + expandVertically(tween(220), expandFrom = Alignment.Top)) togetherWith
+                            (fadeOut(tween(140)) + shrinkVertically(tween(140), shrinkTowards = Alignment.Top))
+                    },
+                ) { selecting ->
+                if (selecting) {
                     // Keep-style selection bar: ✕, count, bulk actions. No
                     // reminder action — a shared time makes no sense for a group.
-                    val allPinned = notes.filter { it.id in selected }.all { it.pinned }
+                    val allPinned = selected.isNotEmpty() && notes.filter { it.id in selected }.all { it.pinned }
                     var bulkMenu by remember { mutableStateOf(false) }
                     fun done() { reload(); selected.clear() }
                     TopAppBar(
@@ -463,7 +478,7 @@ fun App(openState: androidx.compose.runtime.MutableLongState) {
                                 Icon(Icons.Default.Close, stringResource(R.string.cancel))
                             }
                         },
-                        title = { Text("${selected.size}") },
+                        title = { Text("$selCount") },
                         actions = {
                             // Like Keep: pin all unless every one is already pinned.
                             IconButton(onClick = { Db.setPinned(selected.toList(), !allPinned); done() }) {
@@ -541,6 +556,7 @@ fun App(openState: androidx.compose.runtime.MutableLongState) {
                     },
                 )
                 } // else (normal bar)
+                } // AnimatedContent
             },
             floatingActionButton = {
                 // No "create" button in Archive — a new note is never archived —
