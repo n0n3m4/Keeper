@@ -1220,8 +1220,14 @@ fun NoteEditor(
         ReminderDialog(
             at = reminderAt, repeat = reminderRepeat,
             onSet = { at, rep ->
-                if (at != reminderAt || rep != reminderRepeat) reminderFired = false
-                reminderAt = at; reminderRepeat = rep; showReminder = false
+                // A repeating reminder whose chosen instant is already in the
+                // past rolls forward to its next occurrence, so it doesn't fire
+                // immediately on save (Keep-style). One-time reminders keep
+                // firing as catch-up — leave those untouched.
+                val norm = if (rep != "NONE" && at in 1..System.currentTimeMillis())
+                    Notifier.next(at, rep) else at
+                if (norm != reminderAt || rep != reminderRepeat) reminderFired = false
+                reminderAt = norm; reminderRepeat = rep; showReminder = false
             },
             onRemove = { reminderAt = 0L; reminderRepeat = "NONE"; showReminder = false },
             onDismiss = { showReminder = false },
