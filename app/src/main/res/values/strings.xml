@@ -27,6 +27,8 @@
     <string name="more">More</string>
     <string name="open">Open</string>
     <string name="color">Color</string>
+    <string name="info">Info</string>
+    <string name="note_info">Created %1$s · Edited %2$s</string>
     <string name="switch_to_text">Switch to text</string>
     <string name="switch_to_checklist">Switch to checklist</string>
     <string name="labels">Labels</string>

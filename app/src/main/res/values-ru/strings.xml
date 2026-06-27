@@ -27,6 +27,8 @@
     <string name="more">Ещё</string>
     <string name="open">Открыть</string>
     <string name="color">Цвет</string>
+    <string name="info">Сведения</string>
+    <string name="note_info">Создано %1$s · Изменено %2$s</string>
     <string name="switch_to_text">Сделать текстом</string>
     <string name="switch_to_checklist">Сделать списком</string>
     <string name="labels">Ярлыки</string>

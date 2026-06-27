@@ -80,6 +80,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Notifications
@@ -173,6 +174,10 @@ val NoteColors = listOf(
 val RepeatCodes = listOf("NONE", "DAILY", "WEEKLY", "MONTHLY", "YEARLY")
 
 private fun fmt(ms: Long) = SimpleDateFormat("MMM d, HH:mm", Locale.getDefault()).format(Date(ms))
+
+// Editor "show note info" toggle. Process-scoped on purpose: it applies to every
+// note opened this launch and resets on relaunch (deliberately not persisted).
+private val showNoteInfo = mutableStateOf(false)
 
 /** Human label for any repeat code, including custom "EVERY:<n>:<unit>".
  *  Localised, so it takes a Context for string/plural lookup. */
@@ -1125,6 +1130,22 @@ fun NoteEditor(
                             tint = if (showColors) fg else fg.copy(alpha = 0.7f),
                         )
                     }
+                    IconButton(onClick = { showNoteInfo.value = !showNoteInfo.value }) {
+                        Icon(
+                            Icons.Default.Info, stringResource(R.string.info),
+                            tint = if (showNoteInfo.value) fg else fg.copy(alpha = 0.7f),
+                        )
+                    }
+                }
+                // Extra note metadata, shown for every note this launch while the
+                // info toggle is on. Blank/new notes (id 0) have no real timestamps.
+                if (showNoteInfo.value && note.created > 0L) {
+                    Text(
+                        stringResource(R.string.note_info, fmt(note.created), fmt(note.modified)),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = fg.copy(alpha = 0.55f),
+                        modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 6.dp),
+                    )
                 }
             }
         },
